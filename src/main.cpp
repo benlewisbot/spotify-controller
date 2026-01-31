@@ -1,55 +1,64 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
-#include <TFT_eSPI.h>
-#include "config.h"
-#include "display_manager.h"
-#include "touch_manager.h"
 
-// Global Objects
-TFT_eSPI tft = TFT_eSPI();
-DisplayManager displayManager;
-TouchManager touchManager;
+// Display Manager - Automatisch wählen basierend auf DISPLAY_TYPE
+#if DISPLAY_TYPE == CYD_7_INCH
+  // UART Serial Display
+  #include "serial_display_manager.h"
+  #include "touch_manager_uart.h"
+  SerialDisplayManager display;
+  TouchManagerUART touch;
+#else
+  // SPI Display
+  #include <TFT_eSPI.h>
+  #include "display_manager.h"
+  #include "touch_manager.h"
+  TFT_eSPI tft = TFT_eSPI();
+  DisplayManager display;
+  TouchManager touch;
+#endif
 
-// Globals für Spotify
-String accessToken = "";
-String refreshToken = "";
+// Spotify Manager
+#include "spotify_manager.h"
+SpotifyManager spotify;
+
+// Globals
 unsigned long lastSpotifyPoll = 0;
 unsigned long lastTouchCheck = 0;
 bool isPlaying = false;
+bool isMockMode = true; // Wokwi Simulation = true, Hardware = false
 
-// Track Info
-struct TrackInfo {
-  String title = "";
-  String artist = "";
-  String album = "";
-  String coverUrl = "";
-  bool isPlaying = false;
-  int progress = 0;
-  int duration = 0;
-  int volume = 50;
-} currentTrack;
+// Color Definitions (Spotify App Style)
+#if !DISPLAY_TYPE == CYD_7_INCH
+  #define COLOR_BG           0x1212
+  #define COLOR_SURFACE      0x1E1E
+  #define COLOR_GLASS        0x1A1A
+  #define COLOR_PRIMARY      0x1DB954
+  #define COLOR_TEXT         0xFFFF
+  #define COLOR_TEXT_SEC     0xB3B3
+  #define COLOR_PROGRESS_BG  0x2828
+#endif
 
 void setup() {
   Serial.begin(SERIAL_BAUD);
   delay(1000);
 
-  Serial.println("\n==== Spotify Controller ESP32-S3 ===");
+  Serial.println("\n==== Spotify Controller ESP32 ===");
+  Serial.printf("Version: 1.0.0 - Prototype\n");
+  Serial.printf("Mode: %s\n", isMockMode ? "Wokwi Simulation" : "Live Hardware");
 
   // 1. Hardware initialisieren
   initHardware();
 
-  // 2. WiFi verbinden
-  connectWiFi();
+  // 2. Spotify initialisieren
+  initSpotify();
 
-  // 3. Spotify Token prüfen
-  checkSpotifyToken();
-
-  // 4. UI initialisieren
+  // 3. UI initialisieren
   initUI();
 
   Serial.println("✅ Setup abgeschlossen!");
+  Serial.println("🎵 Spotify Controller bereit!");
 }
 
 void loop() {
@@ -71,171 +80,374 @@ void loop() {
 void initHardware() {
   Serial.println("🔧 Hardware wird initialisiert...");
 
-  // 1. Display Manager
-  displayManager.init(tft);
-  
-  // 2. Touch Manager
-  touchManager.init();
+  #if DISPLAY_TYPE == CYD_7_INCH
+    // UART Serial Display
+    display.init(Serial2, TFT_TX, TFT_RX, TFT_BAUD);
+    touch.init(Serial2, TOUCH_RX, TOUCH_TX);
+    Serial.println("  - Serial Display (UART)");
+  #else
+    // SPI Display
+    display.init(tft);
+    touch.init();
+    Serial.println("  - SPI Display");
+  #endif
 
   Serial.println("✅ Hardware initialisiert");
 }
 
-// ===== WIFI =====
+// ===== SPOTIFY INITIALISIERUNG =====
 
-void connectWiFi() {
-  // WiFi Credentials laden
-  File file = LittleFS.open("/config/wifi.json", "r");
-  if (!file) {
-    Serial.println("⚠️ Keine WiFi Config - Hotspot Mode");
-    // TODO: Hotspot starten für Erst-Setup
-    return;
-  }
+void initSpotify() {
+  Serial.println("🎵 Spotify wird initialisiert...");
 
-  DynamicJsonDocument doc(256);
-  deserializeJson(doc, file);
-  file.close();
+  // Mock Mode für Wokwi Simulation
+  spotify.init(isMockMode);
 
-  String ssid = doc["ssid"];
-  String password = doc["password"];
+  #if !isMockMode
+    // Echte Credentials (nur im Live Mode)
+    // TODO: Aus LittleFS laden
+    spotify.setCredentials("YOUR_CLIENT_ID", "YOUR_CLIENT_SECRET");
+    spotify.setTokens("YOUR_ACCESS_TOKEN", "YOUR_REFRESH_TOKEN");
+  #endif
 
-  Serial.printf("Verbinde mit %s...\n", ssid.c_str());
-
-  WiFi.begin(ssid.c_str(), password.c_str());
-
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < WIFI_RETRIES) {
-    delay(1000);
-    Serial.print(".");
-    attempts++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n✅ WiFi verbunden");
-    Serial.printf("IP: %s\n", WiFi.localIP().toString().c_str());
-  } else {
-    Serial.println("\n❌ WiFi fehlgeschlagen");
-  }
+  Serial.println("✅ Spotify initialisiert");
 }
 
-// ===== SPOTIFY =====
-
-void checkSpotifyToken() {
-  File file = LittleFS.open("/config/spotify.json", "r");
-  if (!file) {
-    Serial.println("⚠️ Kein Spotify Token - OAuth Setup nötig");
-    // TODO: OAuth Flow starten
-    return;
-  }
-
-  DynamicJsonDocument doc(512);
-  deserializeJson(doc, file);
-  file.close();
-
-  accessToken = doc["access_token"].as<String>();
-  refreshToken = doc["refresh_token"].as<String>();
-
-  Serial.println("✅ Spotify Token geladen");
-}
+// ===== SPOTIFY UPDATE =====
 
 void updateNowPlaying() {
-  if (accessToken == "") {
-    Serial.println("⚠️ Kein Token");
-    return;
-  }
-
-  // TODO: HTTP GET zu /v1/me/player/currently-playing
-  // TODO: JSON parsen und Track Info extrahieren
-  // TODO: Cover Image herunterladen wenn URL geändert
-  // TODO: UI updaten
+  // Track Info abrufen
+  SpotifyManager::TrackInfo track = spotify.getNowPlaying();
 
   #if DEBUG_SPOTIFY
-    Serial.println("🔍 Spotify Status geprüft");
+    Serial.println("🎵 Now Playing:");
+    Serial.printf("  Titel: %s\n", track.title.c_str());
+    Serial.printf("  Artist: %s\n", track.artist.c_str());
+    Serial.printf("  Album: %s\n", track.album.c_str());
+    Serial.printf("  Status: %s\n", track.isPlaying ? "Playing" : "Paused");
+    Serial.printf("  Fortschritt: %d:%02d / %d:%02d\n",
+      track.progressMs / 60000, (track.progressMs % 60000) / 1000,
+      track.durationMs / 60000, (track.durationMs % 60000) / 1000);
+    Serial.printf("  Volume: %d%%\n", track.volumePercent);
   #endif
-}
 
-void handleTrackChange() {
-  // TODO: Cover Image herunterladen wenn sich Track ändert
+  // UI updaten
+  drawNowPlaying(track);
 }
 
 // ===== UI =====
 
 void initUI() {
   Serial.println("🖥 UI wird initialisiert...");
-  
-  // Display Manager initialisieren
-  displayManager.setAutoDetect(AUTO_DETECT_DISPLAY);
-  
-  // Touch Manager initialisieren
-  touchManager.init();
-  
-  // Touch-Controller anpassen falls XPT2046 gefunden wurde
-  DisplayConfig currentConfig = displayManager.getCurrentConfig();
-  if (currentConfig.touch_int != 255) {
-    // Touch-Pin aus Config lesen und an Touch-Manager weitergeben
-    touchManager.setTouchPin(currentConfig.touch_int);
-  }
 
-  // Initialisieren
-  displayManager.init(tft);
-  
+  #if DISPLAY_TYPE == CYD_7_INCH
+    // UART Serial Display
+    display.setFillColor(0x12, 0x12, 0x12);
+    display.clearScreen();
+  #else
+    // SPI Display
+    display.init(tft);
+    display.fillScreen(COLOR_BG);
+  #endif
+
   Serial.println("✅ UI initialisiert");
-  drawNowPlaying();
 }
 
-void drawNowPlaying() {
-  tft.fillScreen(TFT_BLACK);
+void drawNowPlaying(SpotifyManager::TrackInfo track) {
+  // Clear screen
+  #if DISPLAY_TYPE == CYD_7_INCH
+    display.setFillColor(0x12, 0x12, 0x12);
+    display.clearScreen();
+  #else
+    display.fillScreen(COLOR_BG);
+  #endif
 
-  // Platzhalter Cover (quadratisch, zentriert)
-  uint16_t coverSize = min(tft.width(), tft.height()) - 40;
-  uint16_t coverX = (tft.width() - coverSize) / 2;
-  uint16_t coverY = 20;
-  
-  tft.fillRect(coverX, coverY, coverSize, coverSize, TFT_DARKGREY);
+  // Album Cover
+  drawAlbumCover();
 
   // Track Info
-  tft.setTextColor(TFT_WHITE);
-  tft.setTextSize(2);
-  tft.setCursor(10, coverY + coverSize + 20);
-  tft.println(currentTrack.title);
+  drawTrackInfo(track);
 
-  tft.setTextSize(1);
-  tft.setCursor(10, coverY + coverSize + 50);
-  tft.println(currentTrack.artist);
+  // Progress Bar
+  drawProgressBar(track);
 
   // Controls
-  tft.setTextColor(TFT_BLUE);
-  tft.setTextSize(3);
-  tft.setCursor(20, coverY + coverSize + 100);
-  tft.println("◀  ⏸/▶  ▶");
+  drawControls(track);
 
   // Volume
-  tft.setTextColor(TFT_WHITE);
-  tft.setTextSize(1);
-  tft.setCursor(10, coverY + coverSize + 160);
-  tft.printf("Volume: %d%%", currentTrack.volume);
+  drawVolumeBar(track);
 }
 
-void drawProgressBar() {
-  // TODO: Fortschrittsbalken zeichnen
+void drawAlbumCover() {
+  // Album Cover Bereich
+  uint16_t coverSize = 260;
+  uint16_t coverX = (DISPLAY_WIDTH - coverSize) / 2;
+  uint16_t coverY = 20;
+
+  #if DISPLAY_TYPE == CYD_7_INCH
+    // 7 Inch: Größes Cover
+    coverSize = 400;
+    coverX = (DISPLAY_WIDTH - coverSize) / 2;
+    coverY = 30;
+
+    display.setFillColor(0x1E, 0x1E, 0x1E);
+    display.drawRoundRect(coverX, coverY, coverSize, coverSize, 15);
+  #else
+    display.fillRoundRect(coverX, coverY, coverSize, coverSize, 12, COLOR_SURFACE);
+  #endif
+}
+
+void drawTrackInfo(SpotifyManager::TrackInfo track) {
+  uint16_t y;
+
+  #if DISPLAY_TYPE == CYD_7_INCH
+    // 7 Inch Layout
+    y = 430;
+
+    // Song Title
+    display.setFillColor(0xFF, 0xFF, 0xFF);
+    display.setCursor(50, y);
+    display.print(track.title);
+
+    // Artist
+    display.setFillColor(0xB3, 0xB3, 0xB3);
+    display.setCursor(500, y);
+    display.print(track.artist);
+  #else
+    // Standard Layout (320x480)
+    y = 280;
+
+    // Song Title
+    display.setTextColor(COLOR_TEXT);
+    display.setCursor(30, y);
+    display.print(track.title);
+
+    // Artist Name
+    y += 30;
+    display.setTextColor(COLOR_TEXT_SEC);
+    display.setCursor(30, y);
+    display.print(track.artist);
+
+    // Album Name
+    y += 20;
+    display.setTextColor(COLOR_TEXT_SEC);
+    display.setCursor(30, y);
+    display.print(track.album);
+  #endif
+}
+
+void drawProgressBar(SpotifyManager::TrackInfo track) {
+  uint16_t x, y, w, h, progressW;
+
+  #if DISPLAY_TYPE == CYD_7_INCH
+    // 7 Inch
+    x = 50;
+    y = 485;
+    w = 700;
+    h = 6;
+  #else
+    // Standard (320x480)
+    x = 30;
+    y = 350;
+    w = 260;
+    h = 4;
+  #endif
+
+  progressW = (track.progressMs * w) / track.durationMs;
+
+  // Background
+  #if DISPLAY_TYPE == CYD_7_INCH
+    display.setFillColor(0x28, 0x28, 0x28);
+    display.fillRect(x, y, w, h);
+  #else
+    display.fillRect(x, y, w, h, COLOR_PROGRESS_BG);
+  #endif
+
+  // Progress
+  #if DISPLAY_TYPE == CYD_7_INCH
+    display.setFillColor(0x1D, 0xB9, 0x54);
+    display.fillRect(x, y, progressW, h);
+  #else
+    display.fillRect(x, y, progressW, h, COLOR_PRIMARY);
+  #endif
+
+  // Time Labels
+  uint16_t progressMin = track.progressMs / 60000;
+  uint16_t progressSec = (track.progressMs % 60000) / 1000;
+  uint16_t durationMin = track.durationMs / 60000;
+  uint16_t durationSec = (track.durationMs % 60000) / 1000;
+
+  #if DISPLAY_TYPE == CYD_7_INCH
+    display.setFillColor(0xB3, 0xB3, 0xB3);
+    display.setCursor(50, y + 15);
+    display.printf("%d:%02d", progressMin, progressSec);
+    display.setCursor(750, y + 15);
+    display.printf("%d:%02d", durationMin, durationSec);
+  #else
+    display.setTextColor(COLOR_TEXT_SEC);
+    display.setCursor(x, y + 10);
+    display.printf("%d:%02d", progressMin, progressSec);
+    display.setCursor(x + w - 60, y + 10);
+    display.printf("%d:%02d", durationMin, durationSec);
+  #endif
+}
+
+void drawControls(SpotifyManager::TrackInfo track) {
+  uint16_t y;
+
+  #if DISPLAY_TYPE == CYD_7_INCH
+    // 7 Inch
+    y = 495;
+  #else
+    // Standard (320x480)
+    y = 375;
+  #endif
+
+  // Save (+) Button
+  #if DISPLAY_TYPE == CYD_7_INCH
+    display.setFillColor(track.saved ? 0x1D : 0xB3,
+                        track.saved ? 0xB9 : 0xB3,
+                        track.saved ? 0x54 : 0xB3);
+    display.setCursor(80, y);
+    display.print("+");
+  #else
+    display.setTextColor(track.saved ? COLOR_PRIMARY : COLOR_TEXT_SEC);
+    display.setCursor(35, y);
+    display.print("+");
+  #endif
+
+  // Previous Button
+  #if DISPLAY_TYPE == CYD_7_INCH
+    display.setFillColor(0x1D, 0xB9, 0x54);
+    display.setCursor(180, y);
+    display.print("◀");
+  #else
+    display.setTextColor(COLOR_PRIMARY);
+    display.setCursor(95, y);
+    display.print("◀");
+  #endif
+
+  // Play/Pause Button
+  #if DISPLAY_TYPE == CYD_7_INCH
+    display.setCursor(300, y - 7);
+    if (track.isPlaying) {
+      display.print("⏸");
+    } else {
+      display.print("▶");
+    }
+  #else
+    display.setTextColor(COLOR_PRIMARY);
+    display.setCursor(145, y - 5);
+    if (track.isPlaying) {
+      display.print("⏸");
+    } else {
+      display.print("▶");
+    }
+  #endif
+
+  // Next Button
+  #if DISPLAY_TYPE == CYD_7_INCH
+    display.setCursor(420, y);
+    display.print("▶");
+  #else
+    display.setTextColor(COLOR_PRIMARY);
+    display.setCursor(195, y);
+    display.print("▶");
+  #endif
+}
+
+void drawVolumeBar(SpotifyManager::TrackInfo track) {
+  uint16_t x, y, w, h, volH;
+
+  #if DISPLAY_TYPE == CYD_7_INCH
+    // 7 Inch
+    x = 780;
+    y = 30;
+    w = 4;
+    h = 440;
+  #else
+    // Standard (320x480)
+    x = 290;
+    y = 20;
+    w = 4;
+    h = 440;
+  #endif
+
+  volH = (track.volumePercent * h) / 100;
+
+  // Background
+  #if DISPLAY_TYPE == CYD_7_INCH
+    display.setFillColor(0x28, 0x28, 0x28);
+    display.fillRect(x, y, w, h);
+  #else
+    display.fillRect(x, y, w, h, COLOR_PROGRESS_BG);
+  #endif
+
+  // Volume
+  #if DISPLAY_TYPE == CYD_7_INCH
+    display.setFillColor(0x1D, 0xB9, 0x54);
+    display.fillRect(x, y + h - volH, w, volH);
+  #else
+    display.fillRect(x, y + h - volH, w, volH, COLOR_PRIMARY);
+  #endif
 }
 
 // ===== TOUCH HANDLING =====
 
 void handleTouch() {
-  // Platzhalter für Touch-Handling
-  // TODO: XPT2046 Library einbinden
-  // TODO: Buttons erkennen (Play, Pause, Next, Previous)
-  // TODO: Spotify API Calls senden
-
-  #if DEBUG_DISPLAY
-    // Touch debug-logging wenn aktiv
+  #if DISPLAY_TYPE == CYD_7_INCH
+    // UART Touch
+    auto touchPoint = touch.getTouchPoint();
+    if (touchPoint.pressed) {
+      handleTouchPoint(touchPoint.x, touchPoint.y);
+    }
+  #else
+    // Resistive/Capacitive Touch
+    auto touchPoint = touch.getTouchPoint();
+    if (touchPoint.pressed) {
+      handleTouchPoint(touchPoint.x, touchPoint.y);
+    }
   #endif
 }
 
-// ===== SETTINGS SCREEN =====
-
-void drawSettingsScreen() {
-  // TODO: Settings Screen implementieren
+void handleTouchPoint(uint16_t x, uint16_t y) {
+  // Save (+) Button
+  if (x >= 25 && x <= 75 && y >= 365 && y <= 415) {
+    Serial.println("+ Save Track toggled");
+    // TODO: spotify.toggleSaveTrack();
+    SpotifyManager::TrackInfo track = spotify.getNowPlaying();
+    track.saved = !track.saved;
+    drawControls(track);
+  }
+  // Previous Button
+  else if (x >= 80 && x <= 130 && y >= 365 && y <= 415) {
+    Serial.println("⏮ Previous Track");
+    if (spotify.previousTrack()) {
+      updateNowPlaying();
+    }
+  }
+  // Play/Pause Button
+  else if (x >= 125 && x <= 175 && y >= 360 && y <= 430) {
+    Serial.println("▶ Play/Pause toggled");
+    if (spotify.togglePlay()) {
+      updateNowPlaying();
+    }
+  }
+  // Next Button
+  else if (x >= 180 && x <= 230 && y >= 365 && y <= 415) {
+    Serial.println("⏭ Next Track");
+    if (spotify.nextTrack()) {
+      updateNowPlaying();
+    }
+  }
+  // Volume Bar (vertikal rechts)
+  else if (x >= 280 && x <= 300 && y >= 20 && y <= 460) {
+    int volume = map(y, 20, 460, 100, 0); // Invert: oben = 100%
+    Serial.printf("🔊 Volume: %d%%\n", volume);
+    if (spotify.setVolume(volume)) {
+      updateNowPlaying();
+    }
+  }
 }
 
 // ===== UTILITIES =====
@@ -243,12 +455,4 @@ void drawSettingsScreen() {
 void restartESP() {
   Serial.println("🔄 Neustart...");
   ESP.restart();
-}
-
-void saveWiFiConfig(String ssid, String password) {
-  // TODO: WiFi Config speichern
-}
-
-void saveSpotifyToken(String access, String refresh) {
-  // TODO: Spotify Token speichern
 }
