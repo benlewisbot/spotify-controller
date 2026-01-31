@@ -29,6 +29,34 @@ Ein Spotify Remote Controller mit Touch-Display für ESP32-S3.
 
 ### 2. Software
 
+---
+
+## 🎮 Wokwi Simulation (JETZT TESTEN!)
+
+**Prototype V1 ist bereit für Wokwi Simulation!**
+
+### Schnellstart:
+1. **Wokwi öffnen:** https://wokwi.com/projects/new/esp32
+2. **ESP32 wählen:** ESP32 Dev Module V1
+3. **Code kopieren:** `src/main.cpp` → Wokwi Editor
+4. **Starten:** ▶ (Run)
+5. **Beobachten:** Serial Monitor
+
+**Was du siehst:**
+- 🎵 Linkin Park Tracks (Mock Mode)
+- 📱 Complete UI (Album Cover, Controls, Volume)
+- 🎮 Touch Controls (Play/Pause/Next/Previous)
+- 🔊 Volume Control (vertikal)
+- ➕ Save to Playlist
+
+**Detailliertes Guide:** `docs/WOKWI_GUIDE.md`
+
+**Prototype Documentation:** `docs/PROTOTYPE.md`
+
+---
+
+### 2. Software
+
 **Voraussetzungen:**
 ```bash
 # PlatformIO installieren
