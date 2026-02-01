@@ -10,6 +10,7 @@
 *.elf
 *.hex
 *.map
+*.a
 
 # IDE
 .vscode/
@@ -17,11 +18,33 @@
 *.swp
 *.swo
 *~
+.project
+.cproject
+.settings/
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # Build
 build/
 dist/
+*.pyc
+__pycache__/
+
+# Local configuration (keep example config)
+config.local.h
+secrets.h
+
+# Logs
+*.log
+
+# Upload files
+upload/
+
+# Backup files
+*~
+*.bak
+*.tmp
+*.orig

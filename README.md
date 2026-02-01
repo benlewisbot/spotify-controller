@@ -1,402 +1,261 @@
-# Spotify Controller ESP32-S3
+# 🎵 Spotify Controller ESP32
 
-Ein Spotify Remote Controller mit Touch-Display für ESP32-S3.
+A modern, touch-enabled Spotify controller built with ESP32 and LVGL. Features a Spotify-inspired UI with Apple Liquid Glass effects.
 
-**Unterstützte Boards:**
-- ✅ LilyGo T-Display S3 Touch (ESP32-4848S040) - **Hauptziel**
-- ✅ LilyGo T-Display-S3 Capacitive
-- ✅ Cheap Yellow Display CYD 2.4/2.8/3.5/7"
-- ✅ Standard ILI9341 2.4"
-- ✅ DIY ESP32 + externes Display
+## ✨ Features
 
-**Features:**
-- ✅ Multi-Display Support (8 Displays)
-- ✅ SPI + UART Dual Mode (Auto-Detect)
-- ✅ Capacitive + Resistive Touch
-- ✅ Spotify Style UI (Dark Mode)
-- ✅ Touch Controls (Play/Pause/Next/Previous/Volume)
-- ⏳ WiFi Connection (TODO)
-- ⏳ Spotify API Integration (TODO)
+### Phase 1 (MVP) - Current Version
+- ✅ WiFi connectivity with auto-reconnect
+- ✅ Spotify OAuth 2.0 authentication with PKCE
+- ✅ Playback control (play/pause, next, prev, volume)
+- ✅ Beautiful UI inspired by Spotify + Apple Liquid Glass
+- ✅ Modular display interface (supports multiple displays)
+- ✅ Touch input with visual feedback
+- ✅ Now Playing screen with album art, title, artist
+- ✅ Real-time playback updates
 
----
+### Planned Features
+- [ ] Playlist browser
+- [ ] Progress bar scrubbing
+- [ ] Settings screen
+- [ ] Screensaver
+- [ ] Search functionality
+- [ ] Device selection
 
-## 🚀 Schnellstart (ESP32-4848S040 / LilyGo T-Display S3 Touch)
+## 🖥️ Supported Displays
 
-### 1. Hardware
+- ILI9341 (240x320) - Common resistive touch displays
+- ILI9488 (320x480) - Larger displays
+- ST7789 (240x240, 135x240) - LilyGo T-Display S3
+- ST7796U (320x480) - Cheap Yellow Display
+
+## 🔧 Hardware Requirements
+
+### Components
+- ESP32-WROVER with PSRAM (4MB+)
+- SPI Touch Display (see supported list above)
+- USB-C power supply
+- (Optional) 3D printed case
+
+### Recommended Boards
 - LilyGo T-Display S3 Touch (ESP32-4848S040)
-- USB-C Kabel
-- WiFi
+- Generic ESP32-WROVER + ILI9341 display
+- Cheap Yellow Display (CYD) series
 
-### 2. Software
+## 📦 Installation
 
----
+### Prerequisites
+- [PlatformIO](https://platformio.org/)
+- [ESP32 Arduino Core](https://github.com/espressif/arduino-esp32)
+- [Spotify Premium account](https://www.spotify.com/premium)
+- WiFi network
 
-## 🎮 Wokwi Simulation (JETZT TESTEN!)
+### Setup Steps
 
-**Prototype V1 ist bereit für Wokwi Simulation!**
-
-### Schnellstart:
-1. **Wokwi öffnen:** https://wokwi.com/projects/new/esp32
-2. **ESP32 wählen:** ESP32 Dev Module V1
-3. **Code kopieren:** `src/main.cpp` → Wokwi Editor
-4. **Starten:** ▶ (Run)
-5. **Beobachten:** Serial Monitor
-
-**Was du siehst:**
-- 🎵 Linkin Park Tracks (Mock Mode)
-- 📱 Complete UI (Album Cover, Controls, Volume)
-- 🎮 Touch Controls (Play/Pause/Next/Previous)
-- 🔊 Volume Control (vertikal)
-- ➕ Save to Playlist
-
-**Detailliertes Guide:** `docs/WOKWI_GUIDE.md`
-
-**Prototype Documentation:** `docs/PROTOTYPE.md`
-
----
-
-### 2. Software
-
-**Voraussetzungen:**
+1. **Clone the repository**
 ```bash
-# PlatformIO installieren
-pip install platformio
-
-# VS Code Extension: PlatformIO
+git clone https://github.com/BenLewisbot/spotify-controller-esp32.git
+cd spotify-controller-esp32
 ```
 
-**Kompilieren:**
+2. **Install dependencies**
 ```bash
-cd /home/tod/clawd/projects/spotify-controller
-pio run
+pio install
 ```
 
-**Flashen:**
+3. **Configure Spotify credentials**
+- Register your app at [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+- Create a new application
+- Set redirect URI to: `http://<device-ip>:8080/callback`
+- Copy Client ID and Client Secret
+
+4. **Edit configuration**
+```cpp
+// src/config/Config.hpp
+#define SPOTIFY_CLIENT_ID "your-client-id"
+#define SPOTIFY_CLIENT_SECRET "your-client-secret"
+#define WIFI_SSID "your-wifi-ssid"
+#define WIFI_PASSWORD "your-wifi-password"
+```
+
+5. **Build and upload**
 ```bash
-# Auf das ESP32-4848S040 flashen
 pio run --target upload
 ```
 
-**Serial Monitor:**
+6. **Monitor serial output**
 ```bash
 pio device monitor
 ```
 
-### 3. Konfiguration
+## 🚀 Initial Setup
 
-**Display-Typ ändern:**
-`include/config.h` öffnen und `DISPLAY_TYPE` wählen:
+1. Power on the device
+2. Connect to WiFi (configured in setup)
+3. The device will start an auth server
+4. Open browser to: `http://<device-ip>:8080`
+5. Click "Connect Spotify" and authorize
+6. Device will automatically connect and start showing now playing info
 
-```cpp
-// LilyGo T-Display S3 Touch (ESP32-4848S040)
-#define DISPLAY_TYPE ILI9488_S3
+## 📱 Usage
 
-// Oder andere:
-// #define DISPLAY_TYPE ST7789_S3
-// #define DISPLAY_TYPE CYD_2_4_ST7789  // Cheap Yellow Display 2.4"
-// #define DISPLAY_TYPE CYD_2_8_ST7796U // Cheap Yellow Display 2.8"
-// #define DISPLAY_TYPE CYD_3_5_ST7796U // Cheap Yellow Display 3.5"
-// #define DISPLAY_TYPE CYD_7_INCH      // 7 Inch Serial Screen
-// #define DISPLAY_TYPE ILI9341_S3
-// #define DISPLAY_TYPE DIY_ILI9341
-```
+### Playback Controls
+- **Previous**: Skip to previous track
+- **Play/Pause**: Toggle playback
+- **Next**: Skip to next track
+- **Volume**: Adjust volume (slider or buttons)
 
----
-
-## 📦 Dateistruktur
-
-```
-spotify-controller/
-├── include/
-│   ├── config.h                    # Konfiguration (Display-Typ wählen)
-│   ├── display_manager.h           # SPI Display-Management
-│   ├── serial_display_manager.h    # UART Display-Management (7 Inch)
-│   ├── touch_manager.h             # SPI Touch-Controller
-│   └── touch_manager_uart.h        # UART Touch-Controller (7 Inch)
-├── src/
-│   ├── main.cpp                   # Haupt-Code (SPI Display)
-│   └── main_uart.cpp              # Haupt-Code (UART Display + Dual Mode)
-├── platformio.ini                 # PlatformIO Konfiguration
-├── docs/
-│   └── UI_DESIGN.md               # UI Layouts und Pixel-Koordinaten
-├── REQUIREMENTS.md                # Detaillierte Anforderungen
-├── FRAGEN.md                      # Ben's Antworten
-├── TODO.md                        # Fortschritt
-└── README.md                      # Diese Datei
-```
-
----
-
-## 🖥 Unterstützte Displays
-
-| Typ | Name | Auflösung | Touch | Pinout | Interface |
-|-----|------|-----------|-------|--------|-----------|
-| ILI9488_S3 | LilyGo T-Display S3 Touch | 320x480 | FT6236 | Automatisch | SPI |
-| ST7789_S3 | LilyGo T-Display-S3 | 320x170 | FT6236 | Automatisch | SPI |
-| CYD_2_4_ST7789 | Cheap Yellow Display 2.4" | 240x320 | FT6236 | Automatisch | SPI |
-| CYD_2_8_ST7796U | Cheap Yellow Display 2.8" | 240x320 | FT6236 | Automatisch | SPI |
-| CYD_3_5_ST7796U | Cheap Yellow Display 3.5" | 320x480 | FT6236 | Automatisch | SPI |
-| CYD_7_INCH | 7 Inch Serial Screen | 800x480 | FT6236 | Automatisch | UART |
-| ILI9341_S3 | Standard ILI9341 2.4" | 240x320 | XPT2046 | Automatisch | SPI |
-| DIY_ILI9341 | Custom DIY | Variabel | XPT2046 | Manual | SPI |
-
----
-
-## 🔧 Display-Konfiguration
-
-### LilyGo T-Display S3 Touch (ESP32-4848S040)
-```cpp
-// include/config.h
-#define DISPLAY_TYPE ILI9488_S3
-
-// Pinout (automatisch):
-// TFT_MISO: 12
-// TFT_MOSI: 11
-// TFT_SCLK: 13
-// TFT_CS:   38
-// TFT_DC:   40
-// TFT_RST:  39
-// TOUCH_INT: 18
-```
-
-### Cheap Yellow Display CYD (2.4" / 2.8" / 3.5")
-Günstige ESP32-WROVER-TYPE-C Boards mit Touch-Display.
-
-```cpp
-// include/config.h
-#define DISPLAY_TYPE CYD_2_4_ST7789  // 2.4"
-// oder
-#define DISPLAY_TYPE CYD_2_8_ST7796U // 2.8"
-// oder
-#define DISPLAY_TYPE CYD_3_5_ST7796U // 3.5"
-
-// Pinout (automatisch für alle CYD Größen):
-// TFT_MISO: 5
-// TFT_MOSI: 7
-// TFT_SCLK: 6
-// TFT_CS:   10
-// TFT_DC:   8
-// TFT_RST:  9
-// TOUCH_INT: 16
-```
-
-**Features:**
-- ESP32-WROVER mit WiFi + Bluetooth
-- ST7789 (2.4") oder ST7796U (2.8"/3.5")
-- Capacitive Touch
-- USB-C Anschluss
-- Günstig (~10-20€)
-
-### 7 Inch ESP32-S3 Serial Screen
-Großes Display mit ESP32-S3 Serial Screen Interface.
-
-```cpp
-// include/config.h
-#define DISPLAY_TYPE CYD_7_INCH
-
-// UART Serial Pinout (nicht SPI!):
-// TFT_RX:  16
-// TFT_TX:  17
-// TFT_BAUD: 115200
-// TOUCH_INT: 4
-// TOUCH_RX: 5
-// TOUCH_TX: 18
-```
-
-**Hinweis:** Dieses Display nutzt UART (Serial) statt SPI für die Kommunikation.
-
-**Features:**
-- ESP32-S3 mit WiFi + Bluetooth
-- 7 Zoll Display (800x480)
-- Capacitive Touch
-- Serial Screen Interface (UART)
-- USB-C Anschluss
-
-### Custom DIY Display
-```cpp
-// include/config.h
-#define DISPLAY_TYPE DIY_ILI9341
-
-// Pins manuell setzen:
-#define TFT_MISO  19
-#define TFT_MOSI  23
-#define TFT_SCLK  18
-#define TFT_CS   5
-#define TFT_DC   4
-#define TFT_RST  33
-#define TOUCH_INT  16
-```
-
----
-
-## 🔌 Board-Konfiguration (PlatformIO)
-
-**LilyGo T-Display S3 Touch:**
-```bash
-pio run -e esp32-s3-touch
-```
-
-**Cheap Yellow Display CYD 2.4":**
-```bash
-pio run -e cyd-2-4-st7789
-```
-
-**Cheap Yellow Display CYD 2.8":**
-```bash
-pio run -e cyd-2-8-st7796u
-```
-
-**Cheap Yellow Display CYD 3.5":**
-```bash
-pio run -e cyd-3-5-st7796u
-```
-
-**7 Inch Serial Screen:**
-```bash
-pio run -e cyd-7-inch-serial
-```
-
-**LilyGo T-Display-S3 Capacitive:**
-```bash
-pio run -e esp32-s3-cap
-```
-
-**Standard ILI9341:**
-```bash
-pio run -e esp32-s3-ili9341
-```
-
-**Generic ESP32-S3:**
-```bash
-pio run -e esp32-s3-generic
-```
-
----
-
-## 📝 Entwicklung
-
-**Kompilieren ohne Flashen:**
-```bash
-pio run
-```
-
-**Flashen:**
-```bash
-pio run --target upload
-```
-
-**Clean Build:**
-```bash
-pio run -t clean && pio run
-```
-
-**Upload Port spezifizieren:**
-```bash
-pio run --target upload --upload-port /dev/ttyUSB1
-```
-
----
+### Navigation
+- Swipe left/right to navigate between screens
+- Tap menu icon (⋮) for additional options
 
 ## 🎨 UI Design
 
-Das Design ist in `docs/UI_DESIGN.md` dokumentiert:
+The UI is inspired by:
+- **Spotify App** - Dark theme, green accent color, album-focused design
+- **Apple Liquid Glass** - Translucency, blur effects, smooth animations
 
-**Features:**
-- Spotify Style (Dark Mode)
-- Album Cover Display
-- Track Info (Title, Artist, Album)
-- Touch Controls (Play/Pause/Next/Previous)
-- Progress Bar
-- Volume Slider
-- Portrait + Landscape Mode
-- Multi-Resolution Support (240x320 bis 800x480)
-
-**Color Scheme:**
-- Background: #121212 (Dunkelgrau)
-- Surface: #181818
-- Primary: #1DB954 (Spotify Green)
-- Text Primary: #FFFFFF
-- Text Secondary: #B3B3B3
-
----
-
-## 🔍 Debugging
-
-**Serial Monitor:**
-```bash
-pio device monitor
+### Color Palette
+```
+Background:    #121212 (Dark gray)
+Surface:       #282828 (Elevated surface)
+Primary:       #1DB954 (Spotify green)
+Text:          #FFFFFF (White)
+Text Secondary:#B3B3B3 (Gray)
 ```
 
-**Debug-Modus aktivieren:**
+## 🏗️ Architecture
+
+```
+src/
+├── app/                    # Application controller
+│   ├── App.hpp/cpp         # Main app class
+│   ├── State.hpp           # App state management
+│   └── EventBus.hpp        # Event system
+├── config/                 # Configuration
+│   ├── Config.hpp/cpp      # Config manager
+│   └── lv_conf.h           # LVGL configuration
+├── display/                # Display subsystem
+│   ├── DisplayManager.hpp/cpp
+│   ├── Display.hpp         # Display interface
+│   ├── themes/             # UI themes
+│   │   └── SpotifyTheme.hpp
+│   └── drivers/            # Display drivers
+│       ├── ILI9341Display.hpp
+│       ├── ILI9488Display.hpp
+│       ├── ST7789Display.hpp
+│       ├── ST7796UDisplay.hpp
+│       ├── FT6236Touch.hpp
+│       └── XPT2046Touch.hpp
+├── spotify/                # Spotify API
+│   ├── SpotifyClient.hpp/cpp
+│   ├── AuthManager.hpp/cpp
+│   └── PlaybackController.hpp
+├── ui/                     # UI components
+│   ├── WindowManager.hpp/cpp
+│   └── screens/
+│       ├── NowPlaying.hpp/cpp
+│       ├── Auth.hpp/cpp
+│       └── Settings.hpp/cpp
+├── network/                # Network
+│   └── WiFiManager.hpp/cpp
+└── utils/                  # Utilities
+    ├── Logger.hpp/cpp
+    └── Timer.hpp/cpp
+```
+
+## 🔌 API Endpoints Used
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /me/player` | Get current playback |
+| `GET /me/player/currently-playing` | Get currently playing track |
+| `PUT /me/player/play` | Start playback |
+| `PUT /me/player/pause` | Pause playback |
+| `POST /me/player/next` | Next track |
+| `POST /me/player/previous` | Previous track |
+| `PUT /me/player/volume` | Set volume |
+| `GET /me/playlists` | Get user playlists |
+
+## 📝 Configuration
+
+### Display Type
+Edit `src/config/Config.hpp` to select your display:
 ```cpp
-// include/config.h
-#define DEBUG_MODE true
-#define DEBUG_DISPLAY true
-#define DEBUG_WIFI false
-#define DEBUG_SPOTIFY false
-#define DEBUG_TOUCH false
+#define DISPLAY_TYPE ILI9341  // Options: ILI9341, ILI9488, ST7789, ST7796U
 ```
 
----
+### WiFi
+Configure in `src/config/Config.hpp` or via web UI:
+```cpp
+#define WIFI_SSID "YourNetwork"
+#define WIFI_PASSWORD "YourPassword"
+```
 
-## ⚠️ Bekannte Issues
+### Spotify
+Set your credentials in `src/config/Config.hpp`:
+```cpp
+#define SPOTIFY_CLIENT_ID "your-client-id"
+#define SPOTIFY_CLIENT_SECRET "your-client-secret"
+```
 
-### TODO (Phase 1)
-- [x] WiFi Connection implementieren
-- [x] OAuth2 Flow für Spotify
-- [x] Spotify API Integration
-- [x] Cover Image Download
-- [x] Touch-Handling vollenden
-- [x] On-Screen UI
+## 🐛 Troubleshooting
 
-### TODO (Phase 1.5 - UART)
-- [x] Serial Display Manager implementiert
-- [x] Touch Manager über UART
-- [x] Dual Mode (SPI + UART Auto-Detect)
-- [x] Spotify UI für 800x480
-- [ ] FT6236 Library für UART Touch
+### WiFi won't connect
+- Check SSID and password in config
+- Verify 2.4GHz WiFi (ESP32 doesn't support 5GHz)
+- Check router settings
 
-### TODO (Phase 2)
-- [ ] Playlist Browser
-- [ ] Search Funktion
-- [ ] Settings Screen
-- [ ] Volume Slider (Touch)
-- [ ] Progress Bar (Seekable)
+### Display shows nothing
+- Verify wiring matches User_Setup.h
+- Check 3.3V power supply is adequate
+- Try different display type in config
 
----
+### Authentication fails
+- Verify Client ID and Secret are correct
+- Check redirect URI matches in Spotify Dashboard
+- Make sure Spotify Premium is active
 
-## 📊 Project Progress
+### Touch not working
+- Calibrate touch in settings
+- Verify touch controller is detected on boot
+- Check touch pin configuration
 
-**Gesamt:** ~25% ✅
+## 🤝 Contributing
 
-| Phase | Status | Progress |
-|-------|--------|----------|
-| Phase 1: Grundgerüst | ✅ Abgeschlossen | 100% |
-| Phase 1.5: Serial Display (7 Inch) | ✅ Abgeschlossen | 100% |
-| Phase 2: WiFi & Auth | ⏳ Geplant | 0% |
-| Phase 3: UI & Controls | 🔄 Teilweise | 40% |
-| Phase 4: Spotify API | ⏳ Geplant | 0% |
-| Phase 5: Settings | ⏳ Geplant | 0% |
-| Phase 6: Features | ⏳ Geplant | 0% |
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
----
+### Development
+```bash
+# Build
+pio run
 
-## 📄 Lizenz
+# Upload
+pio run --target upload
 
-MIT License - Für persönlichen Gebrauch.
+# Monitor
+pio device monitor
 
----
+# Clean
+pio run --target clean
+```
 
-## 🤝 Beiträge
+## 📄 License
 
-Gerne! Pull Requests sind willkommen.
+This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
 
----
+## 🙏 Acknowledgments
+
+- [Spotify Web API](https://developer.spotify.com/documentation/web-api)
+- [LVGL](https://lvgl.io/) - Light and Versatile Graphics Library
+- [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) - Display driver library
+- [ArduinoJson](https://arduinojson.org/) - JSON parsing library
 
 ## 📞 Support
 
-Bei Problemen: Issue auf GitHub erstellen oder mich anschreiben.
+- Create an [Issue](https://github.com/BenLewisbot/spotify-controller-esp32/issues) for bugs
+- Start a [Discussion](https://github.com/BenLewisbot/spotify-controller-esp32/discussions) for questions
 
 ---
 
-*Letztes Update: 31.01.2026 - 18:30*
+Made with ❤️ for music lovers
