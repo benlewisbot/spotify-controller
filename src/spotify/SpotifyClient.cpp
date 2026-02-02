@@ -4,10 +4,12 @@
  */
 
 #include "SpotifyClient.hpp"
+#include "SpotifySecure.hpp"
 
 SpotifyClient::SpotifyClient(AuthManager* auth)
     : authManager(auth)
     , tokenExpiryTime(0)
+    , lastRequestTime(0)
     , initialized(false) {
 }
 
@@ -22,8 +24,8 @@ void SpotifyClient::init() {
 
     Serial.println("🎵 Initializing SpotifyClient...");
 
-    // Configure HTTPS client
-    client.setInsecure();  // For Spotify API (TODO: add certificate validation)
+    // Configure HTTPS client with security
+    SpotifySecure::initSecureClient(client);
 
     initialized = true;
     Serial.println("✅ SpotifyClient initialized");
@@ -343,7 +345,7 @@ bool SpotifyClient::downloadImage(const String& url, const String& path) {
     Serial.printf("   Saving to: %s\n", path.c_str());
 
     WiFiClientSecure client;
-    client.setInsecure(); // For image URLs
+    SpotifySecure::initInsecureClient(client); // Images from various sources
 
     HTTPClient http;
     http.begin(client, url);
@@ -417,7 +419,30 @@ bool SpotifyClient::downloadImage(const String& url, const String& path) {
 
 // Private methods
 
+void SpotifyClient::enforceRateLimit() {
+    // Enforce minimum time between requests
+    unsigned long now = millis();
+    unsigned long elapsed = now - lastRequestTime;
+
+    // Handle millis() overflow (every ~49 days)
+    // If elapsed > 1 day, assume overflow happened
+    const unsigned long ONE_DAY_MS = 24UL * 60UL * 60UL * 1000UL;
+    if (elapsed > ONE_DAY_MS) {
+        lastRequestTime = now;
+        return;
+    }
+
+    // Wait if needed
+    if (elapsed < MIN_REQUEST_INTERVAL_MS) {
+        delay(MIN_REQUEST_INTERVAL_MS - elapsed);
+    }
+
+    lastRequestTime = millis();
+}
+
 bool SpotifyClient::httpGet(const String& endpoint, JsonDocument& doc, int expectedCode) {
+    enforceRateLimit();
+
     String url = String(SPOTIFY_API_BASE) + endpoint;
 
     http.begin(client, url);
@@ -452,6 +477,8 @@ bool SpotifyClient::httpGet(const String& endpoint, JsonDocument& doc, int expec
 }
 
 bool SpotifyClient::httpPut(const String& endpoint, const String& body, int expectedCode) {
+    enforceRateLimit();
+
     String url = String(SPOTIFY_API_BASE) + endpoint;
 
     http.begin(client, url);
@@ -470,6 +497,8 @@ bool SpotifyClient::httpPut(const String& endpoint, const String& body, int expe
 }
 
 bool SpotifyClient::httpPost(const String& endpoint, const String& body, int expectedCode) {
+    enforceRateLimit();
+
     String url = String(SPOTIFY_API_BASE) + endpoint;
 
     http.begin(client, url);
@@ -488,6 +517,8 @@ bool SpotifyClient::httpPost(const String& endpoint, const String& body, int exp
 }
 
 bool SpotifyClient::httpDelete(const String& endpoint, int expectedCode) {
+    enforceRateLimit();
+
     String url = String(SPOTIFY_API_BASE) + endpoint;
 
     http.begin(client, url);
@@ -510,8 +541,20 @@ bool SpotifyClient::ensureValidToken() {
         return false;
     }
 
-    // Check if token is expired
-    if (millis() >= tokenExpiryTime) {
+    // Check if token is expired (handling millis() overflow)
+    unsigned long now = millis();
+    const unsigned long ONE_DAY_MS = 24UL * 60UL * 60UL * 1000UL;
+
+    // If the difference is more than a day, assume overflow happened
+    // and the token is NOT expired
+    unsigned long elapsed = now - tokenExpiryTime;
+    if (elapsed > ONE_DAY_MS) {
+        // Overflow detected, token is not expired yet
+        return true;
+    }
+
+    // Check if token has expired normally
+    if (now >= tokenExpiryTime) {
         Serial.println("🔄 Token expired, refreshing...");
         return refreshTokenIfNeeded();
     }

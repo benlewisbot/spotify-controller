@@ -4,6 +4,7 @@
  */
 
 #include "AuthManager.hpp"
+#include "SpotifySecure.hpp"
 
 // Base64 library
 #include <Base64.h>
@@ -96,7 +97,7 @@ String AuthManager::getAuthUrl() {
 
 bool AuthManager::exchangeCodeForTokens(const String& code) {
     WiFiClientSecure client;
-    client.setInsecure();
+    SpotifySecure::initSecureClient(client);
 
     HTTPClient http;
     http.begin(client, SPOTIFY_TOKEN_URL);
@@ -145,7 +146,7 @@ bool AuthManager::exchangeCodeForTokens(const String& code) {
 
 String AuthManager::refreshAccessToken(const String& refreshToken) {
     WiFiClientSecure client;
-    client.setInsecure();
+    SpotifySecure::initSecureClient(client);
 
     HTTPClient http;
     http.begin(client, SPOTIFY_TOKEN_URL);

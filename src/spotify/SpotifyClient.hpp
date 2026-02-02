@@ -195,6 +195,11 @@ private:
     bool httpDelete(const String& endpoint, int expectedCode = 200);
 
     /**
+     * @brief Enforce rate limiting
+     */
+    void enforceRateLimit();
+
+    /**
      * @brief Refresh access token if needed
      */
     bool ensureValidToken();
@@ -224,6 +229,10 @@ private:
     // Current state
     TrackInfo currentTrack;
     DeviceInfo currentDevice;
+
+    // Rate limiting
+    unsigned long lastRequestTime;
+    static constexpr unsigned long MIN_REQUEST_INTERVAL_MS = 100; // Min 100ms between requests
 
     // State tracking
     bool initialized;
