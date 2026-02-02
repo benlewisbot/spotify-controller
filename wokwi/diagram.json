@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "author": "Spotify Controller",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp32",
+      "top": 0,
+      "left": 0,
+      "rotate": 0,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-st7789",
+      "id": "display",
+      "top": 120,
+      "left": 0,
+      "rotate": 0,
+      "attrs": {
+        "width": 240,
+        "height": 320,
+        "rotation": 90
+      }
+    }
+  ],
+  "connections": [
+    ["esp32:D23", "display:CLK"],
+    ["esp32:D18", "display:MOSI"],
+    ["esp32:D19", "display:MISO"],
+    ["esp32:D5", "display:CS"],
+    ["esp32:D2", "display:DC"],
+    ["esp32:D4", "display:RST"],
+    ["esp32:GND.1", "display:GND"],
+    ["esp32:3V3.1", "display:VCC"],
+    ["esp32:D15", "display:BL"]
+  ],
+  "dependencies": {}
+}

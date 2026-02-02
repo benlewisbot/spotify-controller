@@ -46,6 +46,10 @@ bool ConfigManager::init() {
 
     Serial.println("✅ LittleFS mounted");
 
+    // Check filesystem info
+    Serial.printf("   Total: %d bytes, Used: %d bytes\n",
+                   LittleFS.totalBytes(), LittleFS.usedBytes());
+
     // Generate device ID if not set
     if (config.device.deviceId.isEmpty()) {
         generateDeviceId();
@@ -54,6 +58,7 @@ bool ConfigManager::init() {
     // Try to load existing config
     if (!load()) {
         Serial.println("📝 No config file found, using defaults");
+        Serial.println("💡 Configure via web interface or edit data/config.json");
     } else {
         Serial.println("📄 Configuration loaded");
         printConfig();

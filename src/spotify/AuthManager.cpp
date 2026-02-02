@@ -5,6 +5,10 @@
 
 #include "AuthManager.hpp"
 
+// Base64 library
+#include <Base64.h>
+#include <vector>
+
 AuthManager::AuthManager()
     : tokenExpiryTime(0)
     , authServer(nullptr)
@@ -49,7 +53,7 @@ void AuthManager::startAuthServer() {
     // Generate PKCE values
     codeVerifier = generateCodeVerifier();
     codeChallenge = generateCodeChallenge(codeVerifier);
-    state = generateState();
+    oauthState = generateState();
 
     // Create web server
     authServer = new WebServer(AUTH_SERVER_PORT);
@@ -85,7 +89,7 @@ String AuthManager::getAuthUrl() {
     url += "&scope=" + String(SPOTIFY_SCOPES);
     url += "&code_challenge=" + codeChallenge;
     url += "&code_challenge_method=S256";
-    url += "&state=" + state;
+    url += "&state=" + oauthState;
 
     return url;
 }
@@ -216,7 +220,7 @@ void AuthManager::handleIndex() {
 
 void AuthManager::handleCallback() {
     // Check state
-    if (!authServer->hasArg("state") || authServer->arg("state") != state) {
+    if (!authServer->hasArg("state") || authServer->arg("state") != oauthState) {
         Serial.println("⚠️  Invalid state parameter");
         state = AuthState::ERROR;
         authServer->send(400, "text/plain", "Invalid state");
@@ -271,7 +275,9 @@ String AuthManager::secureRandom(size_t length) {
     String result;
 
     for (size_t i = 0; i < length; i++) {
-        result += charset[random(0, sizeof(charset) - 1)];
+        // Use esp_random() for cryptographically secure random numbers
+        uint32_t rand_val = esp_random();
+        result += charset[rand_val % (sizeof(charset) - 1)];
     }
 
     return result;
@@ -303,6 +309,7 @@ String AuthManager::base64UrlDecode(const String& input) {
         decoded += "=";
     }
 
+    // Decode and return
     return base64::decode(decoded);
 }
 
@@ -311,21 +318,6 @@ String AuthManager::sha256(const String& input) {
     uint8_t hash[32];
     esp_sha(SHA256, (const uint8_t*)input.c_str(), input.length(), hash);
 
-    // Convert to hex string, then encode
-    String hex;
-    for (int i = 0; i < 32; i++) {
-        char buf[4];
-        sprintf(buf, "%02x", hash[i]);
-        hex += buf;
-    }
-
-    // Convert hex to bytes
-    std::vector<uint8_t> bytes;
-    for (size_t i = 0; i < hex.length(); i += 2) {
-        uint8_t byte = strtol(hex.substring(i, i + 2).c_str(), NULL, 16);
-        bytes.push_back(byte);
-    }
-
-    // Base64 encode
-    return base64::encode((const char*)bytes.data(), bytes.size());
+    // Base64 encode the hash directly (32 bytes)
+    return base64::encode((const char*)hash, 32);
 }

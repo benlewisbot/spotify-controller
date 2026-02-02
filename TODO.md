@@ -2,10 +2,32 @@
 
 ## Projektstatus
 
-**Phase:** Coding Phase 1 ✅ Started
+**Phase:** Coding Phase 2 🔄 UI Completion
 **Timeline:** 2-3 Wochen
 **Board:** LilyGo T-Display S3 Touch (ESP32-4848S040)
-**Letztes Update:** 31.01.2026
+**Letztes Update:** 01.02.2026
+
+## 🎉 Letzte Änderungen (01.02.2026)
+
+### UI & Controls Completed ✅
+- ✅ Vertical Volume Slider (right side of screen)
+- ✅ Progress Bar with Seek Touch Support
+- ✅ Save/Heart button with visual feedback
+- ✅ Enhanced controls positioning
+- ✅ Improved time formatting for progress
+
+### Wokwi Demo Created ✅
+- ✅ Online demo available at https://wokwi.com/projects/new/esp32
+- ✅ `wokwi/sketch.ino` - Full demo sketch
+- ✅ `wokwi/diagram.json` - ESP32 + ST7789 setup
+- ✅ `wokwi/README.md` - Detailed demo documentation
+- ✅ Serial commands for touch simulation
+- ✅ 5 demo tracks (Linkin Park)
+
+### Documentation Updated ✅
+- ✅ `WOKWI.md` - Enhanced Wokwi guide
+- ✅ `README.md` - Added GUI Demo link section
+- ✅ Quick start options table
 
 ---
 
@@ -67,26 +89,26 @@
 
 ---
 
-## 🔧 Phase 2: WiFi & Authentication (Geplant)
+## 🔧 Phase 2: WiFi & Authentication (🔄 In Arbeit!)
 
 ### WiFi Connection
-- [ ] WiFi Credentials speichern (LittleFS)
-- [ ] WiFi Connection Code
-- [ ] WiFi Error Handling
+- [x] WiFi Credentials speichern (LittleFS)
+- [x] WiFi Connection Code
+- [x] WiFi Error Handling
 - [ ] Hotspot Mode für Erst-Setup
 
 ### OAuth2 (Spotify)
-- [ ] Spotify Client ID & Secret speichern
-- [ ] OAuth2 Authorization URL generieren
-- [ ] Callback Endpoint erstellen
-- [ ] Access Token speichern
-- [ ] Refresh Token implementieren
+- [x] Spotify Client ID & Secret speichern
+- [x] OAuth2 Authorization URL generieren
+- [x] Callback Endpoint erstellen
+- [x] Access Token speichern
+- [x] Refresh Token implementieren
 - [ ] Token Refresh automatisch
 
 ### Filesystem (LittleFS)
-- [ ] /config/ Directory erstellen
-- [ ] wifi.json speichern/laden
-- [ ] spotify.json speichern/laden
+- [x] /config.json speichern/laden
+- [x] data/ Directory erstellt
+- [x] config.example.json erstellt
 - [ ] Cover Cache implementieren
 
 ---
@@ -101,8 +123,8 @@
 - [x] Save (+) Button für Playlist
 - [x] Progress Bar (über Controls!)
 - [x] Volume Bar (vertikal rechts!)
-- [ ] Volume Slider (Touch - für vertikal)
-- [ ] Progress Bar (Seekable)
+- [x] Volume Slider (Touch - für vertikal)
+- [x] Progress Bar (Seekable)
 
 ### UI-Layout
 - [x] Portrait Mode
@@ -239,14 +261,14 @@
 
 ## 📊 Progress
 
-**Gesamt:** ~25% ✅
+**Gesamt:** ~55% ✅
 
 | Phase | Status | Progress |
 |-------|--------|----------|
 | Phase 1: Grundgerüst | ✅ Abgeschlossen | 100% |
 | Phase 1.5: Serial Display (7 Inch) | ✅ Abgeschlossen | 100% |
-| Phase 2: WiFi & Auth | ⏳ Geplant | 0% |
-| Phase 3: UI & Controls | 🔄 Teilweise | 40% |
+| Phase 2: WiFi & Auth | 🔄 In Arbeit | 80% |
+| Phase 3: UI & Controls | ✅ Fast fertig | 85% |
 | Phase 4: Spotify API | ⏳ Geplant | 0% |
 | Phase 5: Settings | ⏳ Geplant | 0% |
 | Phase 6: Features | ⏳ Geplant | 0% |

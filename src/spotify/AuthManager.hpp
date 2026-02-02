@@ -12,12 +12,15 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
-#include <WebServer.h>
+#include <WebServer.h>  // Standard ESP32 WebServer (synchronous)
 #include <WiFiClientSecure.h>
 
 // Spotify Auth endpoints
 #define SPOTIFY_AUTH_URL "https://accounts.spotify.com/authorize"
 #define SPOTIFY_TOKEN_URL "https://accounts.spotify.com/api/token"
+
+// Spotify OAuth Scopes
+#define SPOTIFY_SCOPES "user-read-playback-state user-modify-playback-state user-read-currently-playing user-library-read playlist-read-private playlist-read-collaborative"
 
 // Auth server settings
 #define AUTH_SERVER_PORT 8080
@@ -159,7 +162,7 @@ private:
     // PKCE
     String codeVerifier;
     String codeChallenge;
-    String state;
+    String oauthState;  // OAuth state parameter (different from AuthState enum)
 
     // Web server
     WebServer* authServer;

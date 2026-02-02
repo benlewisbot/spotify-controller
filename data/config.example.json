@@ -1,0 +1,35 @@
+{
+  "_comment": "Copy this file to config.json and edit the values below",
+  "_spotify_setup": "Go to https://developer.spotify.com/dashboard to create an app",
+  "_redirect_uri": "Set Redirect URI to: http://DEVICE_IP:8080/callback",
+  "_scopes": "user-read-playback-state user-modify-playback-state user-read-currently-playing user-library-read playlist-read-private",
+
+  "wifi": {
+    "ssid": "YOUR_WIFI_SSID",
+    "password": "YOUR_WIFI_PASSWORD"
+  },
+  "spotify": {
+    "client_id": "YOUR_SPOTIFY_CLIENT_ID",
+    "client_secret": "YOUR_SPOTIFY_CLIENT_SECRET",
+    "_note": "access_token and refresh_token will be saved automatically after first authentication",
+    "access_token": "",
+    "refresh_token": ""
+  },
+  "display": {
+    "_orientation": "0 = Landscape, 1 = Portrait",
+    "orientation": 1,
+    "brightness": 75,
+    "screensaver": {
+      "enabled": true,
+      "timeout_minutes": 10
+    }
+  },
+  "volume": {
+    "_limit": "Volume limit percentage (0-100)",
+    "limit": 80
+  },
+  "device": {
+    "_device_id": "Auto-generated from MAC address - do not edit",
+    "device_id": ""
+  }
+}

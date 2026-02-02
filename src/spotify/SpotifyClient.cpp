@@ -339,9 +339,80 @@ SpotifyClient::SearchResult SpotifyClient::search(const String& query, int limit
 }
 
 bool SpotifyClient::downloadImage(const String& url, const String& path) {
-    // TODO: Implement image download
-    // This requires HTTP client and file system integration
+    Serial.printf("🖼️  Downloading image: %s\n", url.c_str());
+    Serial.printf("   Saving to: %s\n", path.c_str());
+
+    WiFiClientSecure client;
+    client.setInsecure(); // For image URLs
+
+    HTTPClient http;
+    http.begin(client, url);
+    http.addHeader("User-Agent", "SpotifyController/1.0");
+
+    int httpCode = http.GET();
+
+    if (httpCode != 200) {
+        Serial.printf("⚠️  Image download failed: %d\n", httpCode);
+        http.end();
+        return false;
+    }
+
+    // Get content length
+    int contentLength = http.getSize();
+    Serial.printf("   Image size: %d bytes\n", contentLength);
+
+    if (contentLength == 0 || contentLength > 500000) {
+        Serial.println("⚠️  Invalid image size");
+        http.end();
+        return false;
+    }
+
+    // Read image data
+    WiFiClient* stream = http.getStreamPtr();
+
+    // Open LittleFS file for writing
+    #ifdef LITTLEFS_PRESENT
+    if (!LittleFS.begin()) {
+        Serial.println("⚠️  LittleFS not available");
+        http.end();
+        return false;
+    }
+
+    File file = LittleFS.open(path, "w");
+    if (!file) {
+        Serial.println("⚠️  Failed to open file for writing");
+        http.end();
+        LittleFS.end();
+        return false;
+    }
+
+    // Download and write data
+    uint8_t buffer[1024];
+    int bytesRead = 0;
+    int totalRead = 0;
+
+    while (http.connected() && (bytesRead = stream->readBytes(buffer, sizeof(buffer))) > 0) {
+        file.write(buffer, bytesRead);
+        totalRead += bytesRead;
+
+        // Show progress every 10KB
+        if (totalRead % 10000 == 0) {
+            Serial.printf("   Progress: %d/%d bytes (%d%%)\n",
+                         totalRead, contentLength, (totalRead * 100) / contentLength);
+        }
+    }
+
+    file.close();
+    http.end();
+    LittleFS.end();
+
+    Serial.printf("✅ Image downloaded: %d bytes saved\n", totalRead);
+    return true;
+    #else
+    http.end();
+    Serial.println("⚠️  LittleFS not available, image download skipped");
     return false;
+    #endif
 }
 
 // Private methods

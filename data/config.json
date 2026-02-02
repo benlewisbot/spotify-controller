@@ -1,0 +1,26 @@
+{
+  "wifi": {
+    "ssid": "",
+    "password": ""
+  },
+  "spotify": {
+    "client_id": "",
+    "client_secret": "",
+    "access_token": "",
+    "refresh_token": ""
+  },
+  "display": {
+    "orientation": 0,
+    "brightness": 75,
+    "screensaver": {
+      "enabled": true,
+      "timeout_minutes": 10
+    }
+  },
+  "volume": {
+    "limit": 80
+  },
+  "device": {
+    "device_id": ""
+  }
+}

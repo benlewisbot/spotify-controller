@@ -2,12 +2,23 @@
 
 A modern, touch-enabled Spotify controller built with ESP32 and LVGL. Features a Spotify-inspired UI with Apple Liquid Glass effects.
 
+## 🎮 Try It Now - GUI Demo!
+
+[![Wokwi Demo](https://img.shields.io/badge/GUI_Demo-Online-green?logo=wokwi)](https://wokwi.com/projects/new/esp32)
+
+**See the UI in action without hardware!** Visit the [Wokwi Demo](https://wokwi.com/projects/new/esp32) to try the Spotify Controller interface in your browser.
+
+---
+
 ## ✨ Features
 
-### Phase 1 (MVP) - Current Version
+### Phase 2 (WiFi & Auth) - Current Version 🔄
 - ✅ WiFi connectivity with auto-reconnect
+- ✅ WiFi credentials stored in LittleFS
 - ✅ Spotify OAuth 2.0 authentication with PKCE
-- ✅ Playback control (play/pause, next, prev, volume)
+- ✅ Auth server for captive portal
+- ✅ Access & Refresh token management
+- ✅ Configuration manager with persistent storage
 - ✅ Beautiful UI inspired by Spotify + Apple Liquid Glass
 - ✅ Modular display interface (supports multiple displays)
 - ✅ Touch input with visual feedback
@@ -70,17 +81,24 @@ pio install
 - Copy Client ID and Client Secret
 
 4. **Edit configuration**
-```cpp
-// src/config/Config.hpp
-#define SPOTIFY_CLIENT_ID "your-client-id"
-#define SPOTIFY_CLIENT_SECRET "your-client-secret"
-#define WIFI_SSID "your-wifi-ssid"
-#define WIFI_PASSWORD "your-wifi-password"
+Edit `data/config.json`:
+```json
+{
+  "wifi": {
+    "ssid": "YourWiFiSSID",
+    "password": "YourWiFiPassword"
+  },
+  "spotify": {
+    "client_id": "your_spotify_client_id",
+    "client_secret": "your_spotify_client_secret"
+  }
+}
 ```
 
 5. **Build and upload**
 ```bash
 pio run --target upload
+pio run --target uploadfs  # Upload config.json
 ```
 
 6. **Monitor serial output**
@@ -88,7 +106,40 @@ pio run --target upload
 pio device monitor
 ```
 
+See [docs/QUICKSTART.md](docs/QUICKSTART.md) for detailed instructions.
+
+### Quick Start Options
+
+| Option | Time Required | Description |
+|--------|---------------|-------------|
+| **🎮 Try Demo** | 1 minute | [Wokwi Online Demo](https://wokwi.com/projects/new/esp32) - No hardware needed! |
+| **📦 Clone & Build** | 10 minutes | For real hardware - full Spotify integration |
+| **🖥️ Buy Hardware** | 1-3 days | Get an ESP32 + Display kit |
+
+**New users:** Start with the [Wokwi Demo](https://wokwi.com/projects/new/esp32) to see the UI in action!
+
 ## 🚀 Initial Setup
+
+### Quick Start Options
+
+| Option | Time Required | Description |
+|--------|---------------|-------------|
+| **🎮 Try Demo** | 1 minute | [Wokwi Online Demo](https://wokwi.com/projects/new/esp32) - No hardware needed! |
+| **📦 Build & Flash** | 10 minutes | For real hardware - full Spotify integration |
+| **📖 Read Guide** | 5 minutes | [QUICKSTART.md](QUICKSTART.md) - Detailed setup instructions |
+
+### Option 1: Try Wokwi Demo (No Hardware)
+
+1. Visit [Wokwi ESP32 Editor](https://wokwi.com/projects/new/esp32)
+2. Copy the code from `wokwi/sketch.ino` in this repository
+3. Paste it into the Wokwi editor
+4. Press **▶️ Start** or click **Run**
+5. Watch the demo! Use Serial Monitor (115200 baud) to control:
+   - `play` - Toggle play/pause
+   - `next` - Next track
+   - `vol 50` - Set volume
+
+### Option 2: Real Hardware Setup
 
 1. Power on the device
 2. Connect to WiFi (configured in setup)
@@ -179,24 +230,39 @@ src/
 
 ## 📝 Configuration
 
+### Configuration File (data/config.json)
+All settings are stored in `data/config.json` and uploaded to LittleFS:
+
+```json
+{
+  "wifi": {
+    "ssid": "YourWiFiSSID",
+    "password": "YourWiFiPassword"
+  },
+  "spotify": {
+    "client_id": "your_spotify_client_id",
+    "client_secret": "your_spotify_client_secret",
+    "access_token": "",
+    "refresh_token": ""
+  },
+  "display": {
+    "orientation": 1,
+    "brightness": 75,
+    "screensaver": {
+      "enabled": true,
+      "timeout_minutes": 10
+    }
+  },
+  "volume": {
+    "limit": 80
+  }
+}
+```
+
 ### Display Type
-Edit `src/config/Config.hpp` to select your display:
+Edit `include/config.h` to select your display:
 ```cpp
-#define DISPLAY_TYPE ILI9341  // Options: ILI9341, ILI9488, ST7789, ST7796U
-```
-
-### WiFi
-Configure in `src/config/Config.hpp` or via web UI:
-```cpp
-#define WIFI_SSID "YourNetwork"
-#define WIFI_PASSWORD "YourPassword"
-```
-
-### Spotify
-Set your credentials in `src/config/Config.hpp`:
-```cpp
-#define SPOTIFY_CLIENT_ID "your-client-id"
-#define SPOTIFY_CLIENT_SECRET "your-client-secret"
+#define DISPLAY_TYPE ILI9488_S3  // Options: ILI9488_S3, ST7789_S3, ILI9341_S3, etc.
 ```
 
 ## 🐛 Troubleshooting
