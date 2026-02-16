@@ -13,12 +13,12 @@
 # https://wokwi.com/projects/new/esp32
 
 # Code von hier kopieren:
-cat /home/tod/clawd/projects/spotify-controller/wokwi/sketch.ino
+cat /home/tod/.openclaw/workspace/projects/spotify-controller/wokwi/sketch.ino
 ```
 
 ### 2. Hardware Testen (Mit Gerät)
 ```bash
-cd /home/tod/clawd/projects/spotify-controller
+cd /home/tod/.openclaw/workspace/projects/spotify-controller
 
 # Schnelles Upload
 ./upload.sh
@@ -130,7 +130,7 @@ cat data/config.json
 ## 📝 Notizen
 
 ```
-Projekt: /home/tod/clawd/projects/spotify-controller/
+Projekt: /home/tod/.openclaw/workspace/projects/spotify-controller/
 Git Status: TODO
 Build: `./upload.sh`
 Monitor: `pio device monitor`

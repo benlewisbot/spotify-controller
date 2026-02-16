@@ -30,7 +30,7 @@ test/
 
 1. **Create test environment:**
 ```bash
-cd /home/tod/clawd/projects/spotify-controller
+cd /home/tod/.openclaw/workspace/projects/spotify-controller
 mkdir -p test/platformio
 ```
 

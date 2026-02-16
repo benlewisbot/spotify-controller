@@ -27,7 +27,7 @@ Edit this file to pre-configure your device before flashing:
 
 Using PlatformIO CLI:
 ```bash
-cd /home/tod/clawd/projects/spotify-controller
+cd /home/tod/.openclaw/workspace/projects/spotify-controller
 pio run --target uploadfs
 ```
 

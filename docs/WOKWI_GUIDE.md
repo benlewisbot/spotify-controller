@@ -130,7 +130,7 @@ spotify.setTokens("ACCESS_TOKEN", "REFRESH_TOKEN");
 
 ### 5. Auf Hardware flashen
 ```bash
-cd /home/tod/clawd/projects/spotify-controller
+cd /home/tod/.openclaw/workspace/projects/spotify-controller
 pio run --target upload
 ```
 

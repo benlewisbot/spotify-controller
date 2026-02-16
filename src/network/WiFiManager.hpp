@@ -111,13 +111,13 @@ public:
     /**
      * @brief Get last disconnect reason
      */
-    WiFiMode_t getLastDisconnectReason() const { return lastDisconnectReason; }
+    uint8_t getLastDisconnectReason() const { return lastDisconnectReason; }
 
 private:
     /**
      * @brief Handle WiFi events
      */
-    static void onWiFiEvent(WiFiEvent_t event);
+    static void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info);
 
     /**
      * @brief Check if we should reconnect
@@ -142,7 +142,7 @@ private:
 
     // Disconnect tracking
     unsigned long lastDisconnectTime;
-    WiFiMode_t lastDisconnectReason;
+    uint8_t lastDisconnectReason;
     int reconnectAttempts;
 
     // Singleton reference for event handler

@@ -11,6 +11,8 @@
 
 ConfigManager::ConfigManager() : initialized(false) {
     createDefaults();
+    // Create mutex for thread-safe config operations
+    configMutex = xSemaphoreCreateMutex();
 }
 
 ConfigManager::~ConfigManager() {
@@ -69,37 +71,75 @@ bool ConfigManager::init() {
 }
 
 bool ConfigManager::load() {
-    File file = LittleFS.open(CONFIG_FILE, "r");
-    if (!file) {
-        return false;
+    const char* BACKUP_FILE = "/config.bak";
+
+    // Try to load main config file first
+    if (LittleFS.exists(CONFIG_FILE)) {
+        File file = LittleFS.open(CONFIG_FILE, "r");
+        if (file) {
+            StaticJsonDocument<2048> doc;
+            DeserializationError error = deserializeJson(doc, file);
+            file.close();
+
+            if (!error) {
+                Serial.println("📄 Configuration loaded from main file");
+                JsonObject obj = doc.as<JsonObject>();
+                return parseFromJson(obj);
+            } else {
+                Serial.printf("⚠️  Failed to parse main config: %s\n", error.c_str());
+            }
+        }
     }
 
-    StaticJsonDocument<2048> doc;
-    DeserializationError error = deserializeJson(doc, file);
-    file.close();
+    // Try backup file
+    if (LittleFS.exists(BACKUP_FILE)) {
+        Serial.println("⚠️  Trying backup config file...");
+        File file = LittleFS.open(BACKUP_FILE, "r");
+        if (file) {
+            StaticJsonDocument<2048> doc;
+            DeserializationError error = deserializeJson(doc, file);
+            file.close();
 
-    if (error) {
-        Serial.printf("⚠️  Failed to parse config: %s\n", error.c_str());
-        return false;
+            if (!error) {
+                Serial.println("✅ Configuration loaded from backup");
+                // Restore backup as main config
+                LittleFS.rename(BACKUP_FILE, CONFIG_FILE);
+                JsonObject obj = doc.as<JsonObject>();
+                return parseFromJson(obj);
+            } else {
+                Serial.printf("⚠️  Failed to parse backup config: %s\n", error.c_str());
+            }
+        }
     }
 
-    return parseFromJson(doc);
+    Serial.println("⚠️  No valid config file found");
+    return false;
 }
 
 bool ConfigManager::save() {
-    // Create a temporary file first
-    String tempFile = CONFIG_FILE;
-    tempFile += ".tmp";
+    // Acquire mutex for thread-safe file operations
+    if (configMutex == nullptr || xSemaphoreTake(configMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+        Serial.println("❌ Failed to acquire config mutex");
+        return false;
+    }
 
-    File file = LittleFS.open(tempFile, "w");
+    const char* BACKUP_FILE = "/config.bak";
+    const char* TEMP_FILE = "/config.tmp";
+
+    // 1. Write to temp file first
+    File file = LittleFS.open(TEMP_FILE, "w");
     if (!file) {
-        Serial.println("❌ Failed to create config file");
+        Serial.println("❌ Failed to create temp config file");
+        xSemaphoreGive(configMutex);
         return false;
     }
 
     StaticJsonDocument<2048> doc;
-    if (!serializeToJson(doc)) {
+    JsonObject obj = doc.as<JsonObject>();
+    if (!serializeToJson(obj)) {
         file.close();
+        LittleFS.remove(TEMP_FILE);  // Clean up temp file
+        xSemaphoreGive(configMutex);
         return false;
     }
 
@@ -107,18 +147,40 @@ bool ConfigManager::save() {
     if (serializeJson(doc, file) == 0) {
         Serial.println("❌ Failed to write config");
         file.close();
+        LittleFS.remove(TEMP_FILE);  // Clean up temp file
+        xSemaphoreGive(configMutex);
         return false;
     }
     file.close();
 
-    // Delete old config and rename temp
-    LittleFS.remove(CONFIG_FILE);
-    if (!LittleFS.rename(tempFile, CONFIG_FILE)) {
-        Serial.println("❌ Failed to rename config file");
+    // 2. Create backup of current config (atomic operation)
+    if (LittleFS.exists(CONFIG_FILE)) {
+        if (LittleFS.exists(BACKUP_FILE)) {
+            LittleFS.remove(BACKUP_FILE);
+        }
+        LittleFS.rename(CONFIG_FILE, BACKUP_FILE);
+    }
+
+    // 3. Atomic rename: temp -> config
+    if (!LittleFS.rename(TEMP_FILE, CONFIG_FILE)) {
+        Serial.println("❌ Failed to rename temp to config");
+        // Try to restore from backup
+        if (LittleFS.exists(BACKUP_FILE)) {
+            LittleFS.rename(BACKUP_FILE, CONFIG_FILE);
+            Serial.println("✅ Restored config from backup");
+        }
+        LittleFS.remove(TEMP_FILE);  // Clean up temp file
+        xSemaphoreGive(configMutex);
         return false;
     }
 
-    Serial.println("💾 Configuration saved");
+    // 4. Success - clean up backup (optional, keep for safety)
+    // LittleFS.remove(BACKUP_FILE);  // Uncomment if you want to delete backup
+
+    // Release mutex
+    xSemaphoreGive(configMutex);
+
+    Serial.println("💾 Configuration saved (atomic)");
     return true;
 }
 
@@ -148,52 +210,71 @@ void ConfigManager::generateDeviceId() {
     Serial.printf("📱 Device ID: %s\n", config.device.deviceId.c_str());
 }
 
-bool ConfigManager::parseFromJson(const JsonDocument& doc) {
-    // WiFi
+bool ConfigManager::parseFromJson(const JsonObject& doc) {
+    // WiFi - NULL SAFETY: Check for null values
     if (doc.containsKey("wifi")) {
         JsonObject wifi = doc["wifi"];
-        config.wifi.ssid = wifi["ssid"] | DEFAULT_WIFI_SSID;
-        config.wifi.password = wifi["password"] | DEFAULT_WIFI_PASSWORD;
-    }
-
-    // Spotify
-    if (doc.containsKey("spotify")) {
-        JsonObject spotify = doc["spotify"];
-        config.spotify.clientId = spotify["client_id"] | DEFAULT_SPOTIFY_CLIENT_ID;
-        config.spotify.clientSecret = spotify["client_secret"] | DEFAULT_SPOTIFY_CLIENT_SECRET;
-        config.spotify.accessToken = spotify["access_token"] | "";
-        config.spotify.refreshToken = spotify["refresh_token"] | "";
-    }
-
-    // Display
-    if (doc.containsKey("display")) {
-        JsonObject display = doc["display"];
-        config.display.orientation = display["orientation"] | DEFAULT_DISPLAY_ORIENTATION;
-        config.display.brightness = display["brightness"] | DEFAULT_BRIGHTNESS;
-
-        if (display.containsKey("screensaver")) {
-            JsonObject screensaver = display["screensaver"];
-            config.display.screensaver.enabled = screensaver["enabled"] | true;
-            config.display.screensaver.timeoutMinutes = screensaver["timeout_minutes"] | DEFAULT_SCREENSAVER_TIMEOUT;
+        if (!wifi.isNull()) {
+            const char* ssidVal = wifi["ssid"];
+            config.wifi.ssid = (ssidVal != nullptr) ? ssidVal : DEFAULT_WIFI_SSID;
+            const char* passVal = wifi["password"];
+            config.wifi.password = (passVal != nullptr) ? passVal : DEFAULT_WIFI_PASSWORD;
         }
     }
 
-    // Volume
-    if (doc.containsKey("volume")) {
-        JsonObject volume = doc["volume"];
-        config.volume.limit = volume["limit"] | DEFAULT_VOLUME_LIMIT;
+    // Spotify - NULL SAFETY: Check for null values
+    if (doc.containsKey("spotify")) {
+        JsonObject spotify = doc["spotify"];
+        if (!spotify.isNull()) {
+            const char* clientIdVal = spotify["client_id"];
+            config.spotify.clientId = (clientIdVal != nullptr) ? clientIdVal : DEFAULT_SPOTIFY_CLIENT_ID;
+            const char* secretVal = spotify["client_secret"];
+            config.spotify.clientSecret = (secretVal != nullptr) ? secretVal : DEFAULT_SPOTIFY_CLIENT_SECRET;
+            const char* accessTokenVal = spotify["access_token"];
+            config.spotify.accessToken = (accessTokenVal != nullptr) ? accessTokenVal : "";
+            const char* refreshTokenVal = spotify["refresh_token"];
+            config.spotify.refreshToken = (refreshTokenVal != nullptr) ? refreshTokenVal : "";
+        }
     }
 
-    // Device
+    // Display - NULL SAFETY: Check for null values
+    if (doc.containsKey("display")) {
+        JsonObject display = doc["display"];
+        if (!display.isNull()) {
+            config.display.orientation = display["orientation"] | DEFAULT_DISPLAY_ORIENTATION;
+            config.display.brightness = display["brightness"] | DEFAULT_BRIGHTNESS;
+
+            if (display.containsKey("screensaver")) {
+                JsonObject screensaver = display["screensaver"];
+                if (!screensaver.isNull()) {
+                    config.display.screensaver.enabled = screensaver["enabled"] | true;
+                    config.display.screensaver.timeoutMinutes = screensaver["timeout_minutes"] | DEFAULT_SCREENSAVER_TIMEOUT;
+                }
+            }
+        }
+    }
+
+    // Volume - NULL SAFETY: Check for null values
+    if (doc.containsKey("volume")) {
+        JsonObject volume = doc["volume"];
+        if (!volume.isNull()) {
+            config.volume.limit = volume["limit"] | DEFAULT_VOLUME_LIMIT;
+        }
+    }
+
+    // Device - NULL SAFETY: Check for null values
     if (doc.containsKey("device")) {
         JsonObject device = doc["device"];
-        config.device.deviceId = device["device_id"] | "";
+        if (!device.isNull()) {
+            const char* deviceIdVal = device["device_id"];
+            config.device.deviceId = (deviceIdVal != nullptr) ? deviceIdVal : "";
+        }
     }
 
     return true;
 }
 
-bool ConfigManager::serializeToJson(JsonDocument& doc) const {
+bool ConfigManager::serializeToJson(JsonObject& doc) const {
     // WiFi
     JsonObject wifi = doc.createNestedObject("wifi");
     wifi["ssid"] = config.wifi.ssid;

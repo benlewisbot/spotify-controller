@@ -38,7 +38,7 @@
 4. Enjoy the demo!
 
 ### Option 2: Test on Hardware (10 minutes)
-1. `cd /home/tod/clawd/projects/spotify-controller`
+1. `cd /home/tod/.openclaw/workspace/projects/spotify-controller`
 2. `pio run --target upload`
 3. `pio run --target uploadfs`
 4. `pio device monitor`

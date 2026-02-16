@@ -4,11 +4,11 @@
  */
 
 #include "Auth.hpp"
-#include "../display/themes/SpotifyTheme.hpp"
+#include "../../display/themes/SpotifyTheme.hpp"
 
 #define MARGIN 24
 
-AuthScreen::AuthScreen(lv_obj_t* parent)
+ui::AuthScreen::AuthScreen(lv_obj_t* parent)
     : screen(nullptr)
     , statusLabel(nullptr)
     , qrCodeImage(nullptr) {
@@ -23,13 +23,13 @@ AuthScreen::AuthScreen(lv_obj_t* parent)
     createUI();
 }
 
-AuthScreen::~AuthScreen() {
+ui::AuthScreen::~AuthScreen() {
     if (screen) {
         lv_obj_del(screen);
     }
 }
 
-void AuthScreen::createUI() {
+void ui::AuthScreen::createUI() {
     // Title
     lv_obj_t* titleLabel = lv_label_create(screen);
     lv_obj_align(titleLabel, LV_ALIGN_TOP_MID, 0, MARGIN);
@@ -73,7 +73,7 @@ void AuthScreen::createUI() {
     lv_label_set_text_static(statusLabel, "Waiting for connection...");
 }
 
-void AuthScreen::setAuthUrl(const String& url) {
+void ui::AuthScreen::setAuthUrl(const String& url) {
     authUrl = url;
 
     // Update status with URL
@@ -84,8 +84,6 @@ void AuthScreen::setAuthUrl(const String& url) {
     // For now, we show a placeholder
 }
 
-void AuthScreen::setStatus(const String& message) {
+void ui::AuthScreen::setStatus(const String& message) {
     lv_label_set_text(statusLabel, message.c_str());
 }
-
-} // namespace ui

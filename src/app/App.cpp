@@ -12,7 +12,8 @@
 #include "../spotify/SpotifyClient.hpp"
 #include "../spotify/AuthManager.hpp"
 #include "../ui/WindowManager.hpp"
-#include "../ui/screens/NowPlaying.hpp"
+// #include "../ui/screens/NowPlaying.hpp"  // Disabled for minimal build
+#include "RuntimeConfig.hpp"
 
 #include <WiFi.h>
 
@@ -150,7 +151,12 @@ void App::refreshUI() {
 
 bool App::initConfig() {
     configManager = new ConfigManager();
-    return configManager->init();
+    bool configOk = configManager->init();
+    
+    // Initialize RuntimeConfig manager
+    bool runtimeConfigOk = RuntimeConfigManager::getInstance().begin();
+    
+    return configOk && runtimeConfigOk;
 }
 
 bool App::initLogger() {
@@ -230,7 +236,7 @@ bool App::initSpotify() {
 }
 
 bool App::initUI() {
-    windowManager = new ui::WindowManager(displayManager);
+    windowManager = new WindowManager(displayManager);
     windowManager->init();
 
     // Show initial screen based on state

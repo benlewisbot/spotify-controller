@@ -16,7 +16,7 @@ WiFiManager* WiFiManager::instance = nullptr;
 WiFiManager::WiFiManager()
     : connectTimeout(WIFI_CONNECT_TIMEOUT_MS)
     , autoReconnect(true)
-    , lastDisconnectReason(WIFI_REASON_UNSPECIFIED)
+    , lastDisconnectReason(0)
     , reconnectAttempts(0) {
 
     instance = this;
@@ -167,7 +167,7 @@ void WiFiManager::attemptConnect() {
     connectStartTime = millis();
 }
 
-void WiFiManager::onWiFiEvent(WiFiEvent_t event) {
+void WiFiManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     if (!instance) {
         return;
     }
@@ -186,10 +186,10 @@ void WiFiManager::onWiFiEvent(WiFiEvent_t event) {
             break;
 
         case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-            Serial.printf("📶 WiFi disconnected: %d\n",
-                         ((WiFiEventInfo_t*)xTaskGetCurrentTaskHandle())->disconnected.reason);
+            Serial.printf("📶 WiFi disconnected, reason: %d\n",
+                         info.wifi_sta_disconnected.reason);
             instance->lastDisconnectTime = millis();
-            instance->lastDisconnectReason = (WiFiMode_t)((WiFiEventInfo_t*)xTaskGetCurrentTaskHandle())->disconnected.reason;
+            instance->lastDisconnectReason = info.wifi_sta_disconnected.reason;
             instance->state = WiFiState::DISCONNECTED;
             break;
 

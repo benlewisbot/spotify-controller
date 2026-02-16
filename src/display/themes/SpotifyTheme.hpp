@@ -9,6 +9,7 @@
 #define SPOTIFY_THEME_HPP
 
 #include <lvgl.h>
+#include <cstring>
 
 // Spotify-inspired color palette
 #define COLOR_SPOTIFY_BG           lv_color_hex(0x121212)

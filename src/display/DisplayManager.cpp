@@ -6,15 +6,18 @@
 #include "DisplayManager.hpp"
 #include "../config/Config.hpp"
 
-// Include display drivers
+#ifdef DISPLAY_ST7701S
+// For Guition ESP32-S3-4848S040 with ST7701S
+#include "drivers/ST7701SDisplay.hpp"
+#else
+// Include SPI display drivers for other boards
 #include "drivers/ILI9341Display.hpp"
 #include "drivers/ILI9488Display.hpp"
 #include "drivers/ST7789Display.hpp"
 #include "drivers/ST7796UDisplay.hpp"
-
-// Include touch drivers
 #include "drivers/FT6236Touch.hpp"
 #include "drivers/XPT2046Touch.hpp"
+#endif
 
 // Logging
 #define LOG_TAG "DisplayMgr"
@@ -79,7 +82,27 @@ bool DisplayManager::init() {
 }
 
 bool DisplayManager::createDisplayDriver() {
-    // Auto-detect or use specified type
+#ifdef DISPLAY_ST7701S
+    // For Guition ESP32-S3-4848S040 board
+    displayImpl = new ST7701SDisplay();
+    
+    if (!displayImpl->init()) {
+        delete displayImpl;
+        displayImpl = nullptr;
+        return false;
+    }
+    
+    width = displayImpl->getWidth();
+    height = displayImpl->getHeight();
+    
+    // Set orientation and brightness
+    auto& config = ConfigManager::getInstance();
+    displayImpl->setOrientation(config.getDisplayOrientation() == 1);
+    displayImpl->setBrightness(config.getBrightness());
+    
+    return true;
+#else
+    // Auto-detect or use specified type for SPI displays
     switch (DISPLAY_TYPE) {
         case DISPLAY_TYPE_ILI9341:
             displayImpl = new ILI9341Display();
@@ -100,7 +123,6 @@ bool DisplayManager::createDisplayDriver() {
         case DISPLAY_TYPE_AUTO:
         default:
             // Try to auto-detect
-            // Start with ILI9341 (most common)
             displayImpl = new ILI9341Display();
             if (!displayImpl->init()) {
                 delete displayImpl;
@@ -141,9 +163,22 @@ bool DisplayManager::createDisplayDriver() {
     displayImpl->setBrightness(config.getBrightness());
 
     return true;
+#endif
 }
 
 bool DisplayManager::createTouchDriver() {
+#ifdef DISPLAY_ST7701S
+    // For Guition board with ST7701S, touch is handled by LovyanGFX
+    // Touch is integrated with the display driver
+    touchImpl = new GT911Touch();
+    if (touchImpl->init()) {
+        Serial.printf("✅ Touch: GT911 Capacitive\n");
+        return true;
+    }
+    delete touchImpl;
+    touchImpl = nullptr;
+    return false;
+#else
     // Try FT6236 first (capacitive, common on newer displays)
     touchImpl = new FT6236Touch();
     if (touchImpl->init()) {
@@ -162,6 +197,7 @@ bool DisplayManager::createTouchDriver() {
 
     touchImpl = nullptr;
     return false;
+#endif
 }
 
 bool DisplayManager::initLVGL() {
@@ -189,8 +225,12 @@ bool DisplayManager::initLVGL() {
     }
 
     lv_display_set_flush_cb(display, flushCallback);
-    lv_display_set_flush_ready_cb(display, flushReadyCallback);
+    // Note: lv_display_set_flush_ready_cb not available in LVGL 9, using flush_wait_cb instead
+    // lv_display_set_flush_wait_cb(display, flushWaitCallback);
     lv_display_set_buffers(display, buf1, nullptr, bufferSize, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    
+    // Set user data for callbacks
+    lv_display_set_user_data(display, this);
 
     // Create input device driver
     if (touchImpl) {
@@ -198,6 +238,7 @@ bool DisplayManager::initLVGL() {
         if (indev) {
             lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
             lv_indev_set_read_cb(indev, touchCallback);
+            lv_indev_set_user_data(indev, this);
         }
     }
 
@@ -221,8 +262,18 @@ void DisplayManager::flushCallback(lv_display_t* disp, const lv_area_t* area, ui
     DisplayManager* dm = (DisplayManager*)lv_display_get_user_data(disp);
 
     if (dm && dm->displayImpl) {
-        // TODO: Implement actual pixel rendering to display
-        // This depends on the specific display driver implementation
+        // For ST7701S, LovyanGFX handles flushing internally
+        // For SPI displays, we need to implement flushing via TFT_eSPI
+#ifdef DISPLAY_ST7701S
+        ST7701SDisplay* st7701 = static_cast<ST7701SDisplay*>(dm->displayImpl);
+        if (st7701 && st7701->getLGFX()) {
+            st7701->getLGFX()->setAddrWindow(area->x1, area->y1, 
+                                              area->x2 - area->x1 + 1, 
+                                              area->y2 - area->y1 + 1);
+            st7701->getLGFX()->pushColors((uint16_t*)px_map, 
+                                          (area->x2 - area->x1 + 1) * (area->y2 - area->y1 + 1));
+        }
+#endif
     }
 
     lv_display_flush_ready(disp);
@@ -245,9 +296,8 @@ void DisplayManager::touchCallback(lv_indev_t* indev, lv_indev_data_t* data) {
     }
 }
 
-void DisplayManager::flushReadyCallback(lv_display_t* disp) {
-    lv_display_flush_ready(disp);
-}
+// Note: flushReadyCallback removed - not needed in LVGL 9
+// Flush ready is handled automatically or via flush_wait_cb
 
 void DisplayManager::renderCallback(lv_timer_t* timer) {
     // This is called by LVGL timer system

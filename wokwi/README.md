@@ -4,153 +4,432 @@
 
 Try the Spotify Controller UI in your browser without hardware!
 
-[![Wokwi Demo](https://img.shields.io/badge/Wokwi-Demo-green?logo=wokwi)](https://wokwi.com/projects/new/esp32)
+[![Open in Wokwi](https://img.shields.io/badge/Wokwi-Demo-green?logo=wokwi)](https://wokwi.com/projects/new/esp32)
 
-## 📋 How to Use the Demo
+**Click the link above or visit:** https://wokwi.com/projects/new/esp32
 
-### Quick Start (Online)
+---
 
-1. Visit [wokwi.com/projects/new/esp32](https://wokwi.com/projects/new/esp32)
-2. Copy the content from `wokwi/sketch.ino` in this repo
+## 📋 Quick Start
+
+### Option 1: Copy-Paste (Easiest) ⭐
+
+1. [Open Wokwi ESP32 Editor](https://wokwi.com/projects/new/esp32)
+2. Copy the code from `sketch.ino` in this directory
 3. Paste it into the Wokwi editor
-4. Click the ▶️ Start button
-5. Watch the demo run!
+4. Press **▶️ Start** or click **Run**
+5. Watch the demo!
 
-### Demo Features
+### Option 2: Upload Files
 
-The Wokwi demo simulates the full Spotify Controller UI with:
+1. [Open Wokwi ESP32 Editor](https://wokwi.com/projects/new/esp32)
+2. Click the **+** button in the file list to add files
+3. Upload both `diagram.json` and `sketch.ino`
+4. Press **▶️ Start**
 
-- ✅ **Now Playing Screen** - Shows current track info
-- ✅ **Album Art** - Placeholder with track info
-- ✅ **Progress Bar** - Animated, shows playback position
-- ✅ **Play/Pause** - Toggle playback state
-- ✅ **Next/Previous** - Navigate through demo tracks
-- ✅ **Volume Slider** - Visual volume control
-- ✅ **Track Cycling** - Auto-advances after each track
+---
 
-### Demo Tracks
+## 🎛️ Features Demonstrated
 
-The demo includes 5 Linkin Park tracks:
-1. Papercut (Hybrid Theory)
-2. In The End (Hybrid Theory)
-3. Numb (Meteora)
-4. One Step Closer (Hybrid Theory)
-5. Faint (Meteora)
+| Feature | Status | Description |
+|---------|--------|-------------|
+| **Display** | ✅ | ST7789 (240x320 simulated) |
+| **Touch Input** | ✅ | Via Serial Commands + FT6236 config |
+| **Now Playing Screen** | ✅ | Full UI with album art, track info |
+| **Progress Bar** | ✅ | Animated, seekable via touch |
+| **Play/Pause** | ✅ | Toggle playback state |
+| **Next/Previous** | ✅ | Navigate through demo tracks |
+| **Volume Slider** | ✅ | Vertical slider, touch-enabled |
+| **Save/Like Button** | ✅ | Heart icon with toggle |
+| **Time Display** | ✅ | Current and total time |
+| **Spotify Theme** | ✅ | Dark theme (#121212, #1DB954) |
 
-## 🎛️ Serial Commands
+---
 
-While the demo is running, you can control it via Serial Monitor (115200 baud):
+## 💬 Serial Commands
 
-| Command | Description |
-|---------|-------------|
-| `play` | Toggle play/pause |
+Open the Serial Monitor (115200 baud) to interact with the demo:
+
+### Playback Controls
+| Command | Action |
+|---------|--------|
+| `play`, `pause`, `toggle` | Toggle Play/Pause |
 | `next` | Skip to next track |
-| `prev` | Go to previous track |
-| `vol 50` | Set volume (0-100) |
-| `help` | Show available commands |
+| `prev`, `previous` | Go to previous track |
 
-### Example Session
+### Volume & Seek
+| Command | Action |
+|---------|--------|
+| `vol <0-100>` | Set volume (e.g., `vol 75`) |
+| `seek <0-100>` | Seek to percentage (e.g., `seek 50`) |
 
-```
-> help
-=== Spotify Controller Demo Commands ===
-  play     - Toggle play/pause
-  next     - Next track
-  prev     - Previous track
-  vol <N>  - Set volume (0-100)
-  help     - Show this help
+### Touch Simulation
+| Command | Action |
+|---------|--------|
+| `touch <x,y>` | Simulate touch at coordinates |
+| | Example: `touch 160,240` for center |
 
-> next
-Next track
+### Other Commands
+| Command | Action |
+|---------|--------|
+| `save`, `like` | Toggle saved/liked |
+| `goto <1-N>` | Jump to specific track |
+| `info` | Show current track info |
+| `tracks` | List all available tracks |
+| `help`, `?` | Show this help |
 
-> vol 80
-Volume: 80
+---
 
-> play
-Playing
-```
+## 🎨 Demo Tracks
 
-## 📦 Hardware vs Demo
+The demo includes 6 Linkin Park tracks:
 
-| Feature | Wokwi Demo | Real Hardware |
-|---------|------------|---------------|
-| Display | ST7789 (simulated) | ST7789, ILI9341, ILI9488, etc. |
-| Touch | Serial commands only | FT6236, XPT2046 touch controllers |
-| WiFi | None (simulated) | Real WiFi connection |
-| Spotify API | Mock data only | Real Spotify Web API |
-| Album Art | Placeholder | Real cover images from Spotify |
-| Play/Pause | Simulation only | Real Spotify playback control |
+| # | Title | Album | Duration |
+|---|-------|-------|----------|
+| 1 | Papercut | Hybrid Theory | 3:05 |
+| 2 | In The End | Hybrid Theory | 3:36 |
+| 3 | Numb | Meteora | 3:03 |
+| 4 | One Step Closer | Hybrid Theory | 2:36 |
+| 5 | Faint | Meteora | 2:42 |
+| 6 | Breaking the Habit | Meteora | 3:16 |
 
-## 🔧 Adapting for Real Hardware
+Tracks auto-cycle after each song ends.
 
-To use the demo code on real ESP32 hardware:
+---
 
-1. Install the required libraries:
-   - `TFT_eSPI` - Display driver
-   - `WiFi` - WiFi connection
-   - `HTTPClient` - Spotify API calls
-   - `ArduinoJson` - JSON parsing
+## 📐 Touch Areas (for simulation)
 
-2. Configure your display in `User_Setup.h`
+The display is 240x320 in Wokwi (landscape mode).
 
-3. Add your WiFi credentials:
-   ```cpp
-   const char* WIFI_SSID = "YourWiFi";
-   const char* WIFI_PASSWORD = "YourPassword";
-   ```
+### Volume Slider (Right side)
+- **X range:** 220-235
+- **Y range:** 65-190
+- Touch anywhere in this area to adjust volume
 
-4. Add Spotify credentials (get from [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)):
-   ```cpp
-   const char* SPOTIFY_CLIENT_ID = "your_client_id";
-   const char* SPOTIFY_CLIENT_SECRET = "your_client_secret";
-   ```
+### Progress Bar (Bottom)
+- **X range:** 16-200
+- **Y range:** 270-280
+- Touch to seek to position
 
-5. Implement OAuth2 flow (see full project code)
+### Controls (Bottom row)
+- **Previous:** X=40, Y=290
+- **Play/Pause:** X=110, Y=290
+- **Next:** X=180, Y=290
+
+### Save Button (Top right, left of volume)
+- **X range:** 185-220
+- **Y range:** 16-52
+
+---
+
+## 🔧 Hardware Configuration
+
+The demo simulates the LilyGo T-Display S3 Touch configuration:
+
+### Pinout (ESP32 → Display)
+
+| ESP32 Pin | Display Pin | Function |
+|-----------|-------------|----------|
+| D23 | CLK | SPI Clock |
+| D18 | MOSI | SPI MOSI |
+| D19 | MISO | SPI MISO |
+| D5 | CS | Chip Select |
+| D2 | DC | Data/Command |
+| D4 | RST | Reset |
+| D15 | BL | Backlight |
+| GND | GND | Ground |
+| 3V3 | VCC | Power |
+
+### Pinout (ESP32 → Touch - FT6236)
+
+| ESP32 Pin | Touch Pin | Function |
+|-----------|-----------|----------|
+| D21 | SDA | I2C Data |
+| D22 | SCL | I2C Clock |
+| 3V3 | VCC | Power |
+| GND | GND | Ground |
+
+---
 
 ## 🎨 UI Layout
 
 ```
-┌─────────────────────────────────────────┐
-│  [Menu]  Volume Slider │     [♥] [⋮]  │
-│                                          │
-│  ┌─────────┐  Track Title               │
-│  │         │  Artist Name               │
-│  │  Album  │  Album Name                │
-│  │   Art   │                            │
-│  │         │                            │
-│  │         │                            │
-│  └─────────┘                            │
-│                                          │
-│  0:00 ━━━━━━━━━━━━━━━━━━ 3:05          │
-│     Progress Bar                        │
-│                                          │
-│        <<   [▶]   >>                   │
-│     Controls                             │
-│                                          │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────┐
+│ [≡]              [♡]     [🔊]      │
+│                                      │
+│  ┌──────────────────────────────┐  │
+│  │                              │  │
+│  │       Album Art              │  │
+│  │       LP-HYB                 │  │
+│  │       🎵                     │  │
+│  │                              │  │
+│  └──────────────────────────────┘  │
+│  Papercut                          │
+│  Linkin Park                       │
+│  Hybrid Theory                     │
+│  ● Playing                         │
+│                                      │
+│ 0:00 ███████████░░░░░░ 3:05        │
+│  45%                                │
+│                                      │
+│        ⏮      [⏸]      ⏭         │
+│   ━━━━╱━━━━━━━━━━━━━                │
+│         ━━━━                        │
+│   (volume slider)                   │
+└─────────────────────────────────────┘
 ```
 
-## 📚 Documentation
+---
+
+## 📦 Wokwi Limitations
+
+### What Works in Wokwi ✅
+- Display rendering (ST7789, ILI9341, etc.)
+- ESP32 CPU simulation
+- Serial Monitor (for commands)
+- Basic SPI simulation
+- Touch simulation via serial
+
+### What Doesn't Work in Wokwi ❌
+- WiFi connection (simulated only)
+- HTTPS/TLS for Spotify API
+- Real touch input (use Serial commands instead)
+- Real Spotify authentication
+- Image download from URLs
+- External HTTPS requests
+- LVGL library (simulated with TFT_eSPI)
+
+---
+
+## 🚀 From Demo to Real Hardware
+
+### Required Hardware
+
+- **LilyGo T-Display S3 Touch** (ESP32-4848S040C)
+- **USB-C cable** for programming
+
+### Display Specifications
+
+| Spec | Value |
+|------|-------|
+| Resolution | 480x480 (round display) |
+| Controller | ST7789 |
+| Touch | FT6236 (Capacitive) |
+| Interface | SPI + I2C |
+
+### Steps to Flash Real Hardware
+
+1. **Clone the Repository**
+   ```bash
+   git clone <repository-url>
+   cd spotify-controller
+   ```
+
+2. **Configure Hardware**
+   Edit `include/config.h`:
+   ```cpp
+   #define DISPLAY_WIDTH 480
+   #define DISPLAY_HEIGHT 480
+   #define TOUCH_I2C_ADDR 0x38
+   ```
+
+3. **Add WiFi & Spotify Credentials**
+   Edit `data/config.json`:
+   ```json
+   {
+     "wifi": {
+       "ssid": "YourWiFiSSID",
+       "password": "YourWiFiPassword"
+     },
+     "spotify": {
+       "client_id": "your_spotify_client_id",
+       "client_secret": "your_spotify_client_secret"
+     }
+   }
+   ```
+
+4. **Build and Upload**
+   ```bash
+   # Using PlatformIO
+   pio run --target upload
+   pio run --target uploadfs
+
+   # Or using Arduino IDE
+   - Select board: ESP32-S3
+   - Set correct partition scheme
+   - Upload sketch
+   - Upload SPIFFS/LittleFS data
+   ```
+
+5. **Monitor Output**
+   ```bash
+   pio device monitor
+   ```
+
+### Getting Spotify Credentials
+
+1. Visit [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Log in with your Spotify account
+3. Click **"Create App"**
+4. Fill in:
+   - App name: `Spotify Controller`
+   - App description: `ESP32 Spotify Controller`
+   - Redirect URI: `http://<device-ip>:8080/callback`
+5. Copy **Client ID** and **Client Secret** to `config.json`
+
+---
+
+## 📖 Complete Feature List (Real Hardware)
+
+### Phase 1: WiFi & Auth ✅
+- ✅ WiFi Connection with auto-reconnect
+- ✅ LittleFS for configuration storage
+- ✅ Spotify OAuth2 Flow (Authorization Code with PKCE)
+- ✅ Hotspot Mode for first-time setup
+- ✅ Token refresh handling
+
+### Phase 2: Spotify API ✅
+- ✅ Currently Playing endpoint
+- ✅ Player Controls (Play, Pause, Next, Previous)
+- ✅ Volume Control
+- ✅ Seek (position in track)
+- ✅ Progress Tracking
+- ✅ Track Info extraction (title, artist, album, cover)
+- ✅ Save/Like Track functionality
+
+### Phase 3: GUI ✅
+- ✅ Spotify Dark Theme (#121212 background, #1DB954 primary)
+- ✅ Now Playing Screen
+- ✅ Album Art placeholder
+- ✅ Track Info (Title, Artist, Album)
+- ✅ Progress Bar with seek
+- ✅ All Controls (Play/Pause, Next/Prev, Volume, Save)
+
+### Phase 4: Touch ✅
+- ✅ FT6236 Touch Controller support
+- ✅ Touch events for all buttons
+- ✅ Volume slider (vertical)
+- ✅ Progress bar seek
+
+### Phase 5: Wokwi Demo ✅
+- ✅ Full Wokwi configuration
+- ✅ Online demo ready
+- ✅ Test instructions
+
+---
+
+## 🎯 Usage Examples
+
+### Example 1: Control Playback
+
+```bash
+> play
+▶ Playing
+
+> pause
+⏸ Paused
+
+> toggle
+▶ Playing
+```
+
+### Example 2: Navigate Tracks
+
+```bash
+> next
+⏭ Next track: In The End
+
+> prev
+⏮ Previous track: Papercut
+
+> goto 3
+Track 3: Numb
+```
+
+### Example 3: Volume Control
+
+```bash
+> vol 50
+Volume: 50%
+
+> vol 100
+Volume: 100%
+```
+
+### Example 4: Seek
+
+```bash
+> seek 50
+Seek to: 1:32 (50%)
+
+> seek 0
+Seek to: 0:00 (0%)
+```
+
+### Example 5: Touch Simulation
+
+```bash
+> touch 160,290
+Touch: (160, 290)
+▶ Playing
+
+> touch 240,150
+Touch: (240, 150)
+Volume: 75%
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Wokwi Issues
+
+| Problem | Solution |
+|---------|----------|
+| Display shows nothing | Check diagram.json connections |
+| Serial not responding | Set baud rate to 115200 |
+| Code won't compile | Check for library dependencies (TFT_eSPI) |
+| Touch not working | Use Serial commands instead |
+
+### Hardware Issues
+
+| Problem | Solution |
+|---------|----------|
+| Display blank | Verify wiring and power (3.3V) |
+| WiFi won't connect | Check SSID/password, use 2.4GHz only |
+| Spotify auth fails | Verify Client ID, Secret, and redirect URI |
+| Touch not working | Check I2C connections (SDA/SCL) |
+
+---
+
+## 📚 Additional Documentation
 
 - [Main README](../README.md) - Full project documentation
 - [TODO](../TODO.md) - Development roadmap
-- [REQUIREMENTS](../REQUIREMENTS.md) - Feature list
+- [REQUIREMENTS](../REQUIREMENTS.md) - Feature requirements
+- [WOKWI.md](../WOKWI.md) - Wokwi integration guide
+- [TROUBLESHOOTING](../docs/TROUBLESHOOTING.md) - Troubleshooting guide
 
-## 🚀 Next Steps
+---
 
-After trying the demo:
+## 🙏 Resources & Credits
 
-1. Get the hardware (ESP32 + Display)
-2. Clone the full repository
-3. Follow the [Quick Start Guide](../README.md#installation)
-4. Set up Spotify credentials
-5. Flash to your device
-
-## 🙏 Acknowledgments
-
-- [Wokwi](https://wokwi.com/) - Arduino simulator
+- [Wokwi Documentation](https://docs.wokwi.com/) - Arduino simulator
+- [TFT_eSPI Library](https://github.com/Bodmer/TFT_eSPI) - Display driver
+- [ESP32 Arduino Core](https://github.com/espressif/arduino-esp32)
 - [Spotify Web API](https://developer.spotify.com/documentation/web-api)
-- [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) - Display driver
+- [LilyGo T-Display S3](https://www.lilygo.cc/products/t-display-s3)
+
+---
+
+## 🎉 Ready for the Real Thing?
+
+**Get the hardware and start building!**
+
+1. Order LilyGo T-Display S3 Touch
+2. Clone the repository
+3. Follow the configuration steps above
+4. Flash and enjoy your Spotify Controller!
 
 ---
 

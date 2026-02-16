@@ -14,6 +14,8 @@
 #define APP_HPP
 
 #include <Arduino.h>
+#include <vector>
+#include <functional>
 #include "State.hpp"
 #include "EventBus.hpp"
 
@@ -23,9 +25,9 @@ class SpotifyClient;
 class WiFiManager;
 class AuthManager;
 class ConfigManager;
+class WindowManager;
 
 namespace ui {
-    class WindowManager;
     class NowPlayingScreen;
 }
 
@@ -160,7 +162,7 @@ private:
     DisplayManager* displayManager;
     AuthManager* authManager;
     SpotifyClient* spotifyClient;
-    ui::WindowManager* windowManager;
+    WindowManager* windowManager;
 
     // Task scheduling
     struct ScheduledTask {

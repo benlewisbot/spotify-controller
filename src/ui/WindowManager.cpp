@@ -1,12 +1,18 @@
 /**
  * @file WindowManager.cpp
- * @brief Window Manager Implementation
+ * @brief Window Manager Implementation (Minimal Version)
  */
 
 #include "WindowManager.hpp"
-#include "screens/NowPlaying.hpp"
-#include "screens/Auth.hpp"
-#include "screens/Settings.hpp"
+
+// Disabled for minimal build:
+// #include "screens/NowPlaying.hpp"
+// #include "screens/Auth.hpp"
+// #include "screens/Settings.hpp"
+// #include "screens/WiFiSettingsScreen.hpp"
+// #include "screens/SpotifyTokenScreen.hpp"
+// #include "screens/DisplaySettingsScreen.hpp"
+// #include "screens/AboutScreen.hpp"
 
 WindowManager::WindowManager(DisplayManager* dm)
     : displayManager(dm)
@@ -15,79 +21,62 @@ WindowManager::WindowManager(DisplayManager* dm)
     , nowPlayingScreen(nullptr)
     , authScreen(nullptr)
     , settingsScreen(nullptr)
+    , wifiSettingsScreen(nullptr)
+    , spotifyTokenScreen(nullptr)
+    , displaySettingsScreen(nullptr)
+    , aboutScreen(nullptr)
+    , menuManager(nullptr)
     , initialized(false) {
 }
 
 WindowManager::~WindowManager() {
-    delete nowPlayingScreen;
-    delete authScreen;
-    delete settingsScreen;
+    // Cleanup handled by LVGL
 }
 
 void WindowManager::init() {
-    if (initialized) {
-        return;
-    }
-
-    Serial.println("🖼  Initializing WindowManager...");
-
-    // Apply theme
-    extern void spotify_theme_apply();
-    spotify_theme_apply();
-
-    // Create root object
-    root = lv_obj_create(NULL);
-    lv_obj_set_size(root, LV_HOR_RES, LV_VER_RES);
+    if (initialized) return;
+    
+    // Create root container
+    root = lv_obj_create(lv_scr_act());
+    lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
+    lv_obj_set_pos(root, 0, 0);
     lv_obj_set_style_bg_color(root, lv_color_hex(0x121212), 0);
     lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(root, 0, 0);
+    lv_obj_set_style_pad_all(root, 0, 0);
+    lv_obj_set_scrollbar_mode(root, LV_SCROLLBAR_MODE_OFF);
 
-    // Load screen
-    lv_scr_load(root);
+    // Create a simple placeholder label
+    lv_obj_t* label = lv_label_create(root);
+    lv_obj_center(label);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(0x1DB954), 0);
+    lv_label_set_text_static(label, "Spotify Controller");
+    
+    // Status label below
+    lv_obj_t* statusLabel = lv_label_create(root);
+    lv_obj_align_to(statusLabel, label, LV_ALIGN_OUT_BOTTOM_MID, 0, 20);
+    lv_obj_set_style_text_font(statusLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(statusLabel, lv_color_hex(0xB3B3B3), 0);
+    lv_label_set_text_static(statusLabel, "Minimal build - UI screens disabled");
 
     initialized = true;
-    Serial.println("✅ WindowManager initialized");
 }
 
 void WindowManager::update() {
-    // LVGL tasks are handled by DisplayManager
-    if (nowPlayingScreen) {
-        nowPlayingScreen->update();
-    }
+    // LVGL update is handled by DisplayManager
 }
 
 void WindowManager::showNowPlaying() {
-    Serial.println("🖼  Showing Now Playing screen");
-
-    if (!nowPlayingScreen) {
-        nowPlayingScreen = new ui::NowPlayingScreen(root);
-    }
-
-    transitionTo(nowPlayingScreen->getScreen());
+    // Disabled for minimal build
 }
 
 void WindowManager::showAuthScreen() {
-    Serial.println("🖼  Showing Authentication screen");
-
-    if (!authScreen) {
-        authScreen = new ui::AuthScreen(root);
-    }
-
-    transitionTo(authScreen->getScreen());
+    // Disabled for minimal build
 }
 
 void WindowManager::showSettings() {
-    Serial.println("🖼  Showing Settings screen");
-
-    if (!settingsScreen) {
-        settingsScreen = new ui::SettingsScreen(root);
-    }
-
-    transitionTo(settingsScreen->getScreen());
-}
-
-void WindowManager::goBack() {
-    // Simple navigation: always go back to Now Playing
-    showNowPlaying();
+    // Disabled for minimal build
 }
 
 lv_obj_t* WindowManager::createScreen() {

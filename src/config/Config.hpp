@@ -130,23 +130,21 @@ public:
     void printConfig() const;
 
 private:
+    void createDefaults();
+
+public:
     ConfigManager();
     ~ConfigManager();
 
     /**
-     * @brief Create default configuration
-     */
-    void createDefaults();
-
-    /**
      * @brief Parse JSON to config struct
      */
-    bool parseFromJson(const JsonDocument& doc);
+    bool parseFromJson(const JsonObject& doc);
 
     /**
      * @brief Serialize config struct to JSON
      */
-    bool serializeToJson(JsonDocument& doc) const;
+    bool serializeToJson(JsonObject& doc) const;
 
     // Configuration structure
     struct {
@@ -181,6 +179,9 @@ private:
     } config;
 
     bool initialized;
+
+    // Mutex for thread-safe config operations
+    SemaphoreHandle_t configMutex;
 };
 
 #endif // CONFIG_HPP

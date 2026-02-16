@@ -5,6 +5,11 @@
 
 #include "SpotifyTheme.hpp"
 
+// C wrapper function for WindowManager
+extern "C" void spotify_theme_apply() {
+    SpotifyTheme::apply();
+}
+
 // Static member initialization
 lv_style_t SpotifyTheme::styleScreenBg;
 lv_style_t SpotifyTheme::styleButtonNormal;
@@ -63,8 +68,9 @@ void SpotifyTheme::apply() {
     lv_style_set_bg_opa(&styleButtonPressed, LV_OPA_COVER);
     lv_style_set_transform_scale_x(&styleButtonPressed, 950);
     lv_style_set_transform_scale_y(&styleButtonPressed, 950);
-    lv_style_set_transition_time(&styleButtonPressed, 150);
-    lv_style_set_transition_prop(&styleButtonPressed, LV_STYLE_TRANSFORM_SCALE_X);
+    // Note: LVGL 9 uses different transition API
+    // lv_style_set_transition_time(&styleButtonPressed, 150);
+    // lv_style_set_transition_prop(&styleButtonPressed, LV_STYLE_TRANSFORM_SCALE_X);
 
     // Style primary button (Play, etc.)
     lv_style_set_radius(&styleButtonPrimary, RADIUS_MD);
@@ -124,7 +130,8 @@ void SpotifyTheme::apply() {
     lv_style_set_pad_all(&styleListBg, 0);
 
     // Style list item
-    lv_style_set_bg_color(&styleListItem, LV_TRANSP_COLOR);
+    lv_style_set_bg_color(&styleListItem, lv_color_hex(0x000000));
+    lv_style_set_bg_opa(&styleListItem, LV_OPA_TRANSP);
     lv_style_set_bg_opa(&styleListItem, LV_OPA_TRANSP);
     lv_style_set_pad_hor(&styleListItem, SPACING_MD);
     lv_style_set_pad_ver(&styleListItem, SPACING_SM);

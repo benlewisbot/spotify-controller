@@ -10,6 +10,11 @@ private:
   uint8_t touchRx;
   uint8_t touchTx;
   bool initialized;
+  uint16_t syncLostCount;
+
+  // Touch protocol constants
+  static constexpr uint8_t TOUCH_HEADER_BYTE = 0xAA;
+  static constexpr uint8_t TOUCH_PACKET_SIZE = 7;
 
 public:
   struct TouchPoint {
@@ -19,13 +24,14 @@ public:
     uint8_t gesture; // Swipe, Tap, etc.
   };
 
-  TouchManagerUART() : serial(nullptr), initialized(false) {
+  TouchManagerUART() : serial(nullptr), initialized(false), syncLostCount(0) {
   }
 
   void init(HardwareSerial& serialRef, uint8_t rxPin, uint8_t txPin) {
     serial = &serialRef;
     touchRx = rxPin;
     touchTx = txPin;
+    syncLostCount = 0;
 
     // Serial für Touch initialisieren
     serial->begin(115200, SERIAL_8N1, rxPin, txPin);
@@ -46,7 +52,7 @@ public:
     }
 
     // Prüfen ob Touch-Daten verfügbar
-    return serial->available() >= 7;
+    return serial->available() >= TOUCH_PACKET_SIZE;
   }
 
   TouchPoint getTouchPoint() {
@@ -56,17 +62,60 @@ public:
       return point;
     }
 
-    // Warte auf Touch-Daten
-    if (serial->available() >= 7) {
-      uint8_t header = serial->read();
-      if (header == 0xAA) { // Touch-Header
-        point.x = (serial->read() << 8) | serial->read();
-        point.y = (serial->read() << 8) | serial->read();
-        point.pressed = serial->read() == 0x01;
-        point.gesture = serial->read();
+    // Robust sync: Search for header byte
+    while (serial->available() > 0) {
+      uint8_t peekedByte = serial->peek();  // Look ahead without reading
+
+      if (peekedByte == TOUCH_HEADER_BYTE) {
+        break;  // Header found!
+      }
+
+      // Wrong byte -> discard and continue searching
+      serial->read();
+      syncLostCount++;
+
+      if (syncLostCount > 100) {
+        Serial.println("⚠️ UART sync lost, flushing buffer");
+        while (serial->available()) {
+          serial->read();
+        }
+        syncLostCount = 0;
+        return point;
       }
     }
 
+    // Need at least 7 bytes: Header + X(2) + Y(2) + Pressed(1) + Gesture(1)
+    if (serial->available() < TOUCH_PACKET_SIZE) {
+      return point;  // Not enough data yet
+    }
+
+    // Read header
+    uint8_t header = serial->read();
+    if (header != TOUCH_HEADER_BYTE) {
+      return point;  // Should not happen after sync check above
+    }
+
+    // Read data bytes
+    uint8_t x_high = serial->read();
+    uint8_t x_low = serial->read();
+    uint8_t y_high = serial->read();
+    uint8_t y_low = serial->read();
+    point.pressed = (serial->read() == 0x01);
+    point.gesture = serial->read();
+
+    // Parse coordinates
+    point.x = (x_high << 8) | x_low;
+    point.y = (y_high << 8) | y_low;
+
+    // Bounds check (Bug #15)
+    if (point.x >= DISPLAY_WIDTH || point.y >= DISPLAY_HEIGHT) {
+      #if DEBUG_TOUCH
+        Serial.printf("⚠️ Touch out of bounds: %d,%d\n", point.x, point.y);
+      #endif
+      point.pressed = false;
+    }
+
+    syncLostCount = 0;
     return point;
   }
 

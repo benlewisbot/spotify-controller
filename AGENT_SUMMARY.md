@@ -1,7 +1,7 @@
 # 🎉 Spotify GUI Agent - Zusammenfassung
 
 **Datum:** 02.02.2026
-**Projekt:** /home/tod/clawd/projects/spotify-controller/
+**Projekt:** /home/tod/.openclaw/workspace/projects/spotify-controller/
 **Aufgabe:** GUI für Morgen früh fertig machen!
 
 ---
@@ -158,7 +158,7 @@
 https://wokwi.com/projects/new/esp32
 
 # 2. Code kopieren
-cat /home/tod/clawd/projects/spotify-controller/wokwi/sketch.ino
+cat /home/tod/.openclaw/workspace/projects/spotify-controller/wokwi/sketch.ino
 
 # 3. In Wokwi Editor pasten
 # 4. ▶️ Start klicken
@@ -167,7 +167,7 @@ cat /home/tod/clawd/projects/spotify-controller/wokwi/sketch.ino
 ### Option 2: Hardware Testen - 5 Minuten
 
 ```bash
-cd /home/tod/clawd/projects/spotify-controller
+cd /home/tod/.openclaw/workspace/projects/spotify-controller
 
 # Upload script
 ./upload.sh

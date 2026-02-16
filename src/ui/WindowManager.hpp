@@ -10,12 +10,17 @@
 
 #include <lvgl.h>
 #include "../display/DisplayManager.hpp"
+#include "screens/MenuManager.hpp"
 
 // Forward declarations
 namespace ui {
     class NowPlayingScreen;
     class AuthScreen;
     class SettingsScreen;
+    class WiFiSettingsScreen;
+    class SpotifyTokenScreen;
+    class DisplaySettingsScreen;
+    class AboutScreen;
 }
 
 /**
@@ -67,6 +72,11 @@ public:
      * @brief Get root object
      */
     lv_obj_t* getRoot() const { return root; }
+    
+    /**
+     * @brief Get menu manager
+     */
+    MenuManager* getMenuManager() { return menuManager; }
 
 private:
     /**
@@ -83,6 +93,11 @@ private:
      * @brief Transition to a new screen
      */
     void transitionTo(lv_obj_t* newScreen);
+    
+    /**
+     * @brief Initialize settings sub-screens
+     */
+    void initSettingsScreens();
 
     DisplayManager* displayManager;
     lv_obj_t* root;
@@ -91,7 +106,14 @@ private:
     ui::NowPlayingScreen* nowPlayingScreen;
     ui::AuthScreen* authScreen;
     ui::SettingsScreen* settingsScreen;
-
+    
+    // Settings sub-screens
+    ui::WiFiSettingsScreen* wifiSettingsScreen;
+    ui::SpotifyTokenScreen* spotifyTokenScreen;
+    ui::DisplaySettingsScreen* displaySettingsScreen;
+    ui::AboutScreen* aboutScreen;
+    
+    MenuManager* menuManager;
     bool initialized;
 };
 

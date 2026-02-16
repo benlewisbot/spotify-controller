@@ -38,7 +38,7 @@ cp config.example.json config.json
 pip install platformio
 
 # Kompilieren und hochladen
-cd /home/tod/clawd/projects/spotify-controller
+cd /home/tod/.openclaw/workspace/projects/spotify-controller
 pio run --target upload --environment esp32-wrover
 
 # Optional: Konfiguration hochladen

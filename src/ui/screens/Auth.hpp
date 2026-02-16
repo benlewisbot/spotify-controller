@@ -9,6 +9,7 @@
 #define AUTH_SCREEN_HPP
 
 #include <lvgl.h>
+#include <Arduino.h>
 
 namespace ui {
 

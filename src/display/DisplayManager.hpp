@@ -119,7 +119,7 @@ public:
         }
     }
 
-private:
+public:
     DisplayManager();
     ~DisplayManager();
 

@@ -22,6 +22,14 @@
         "height": 320,
         "rotation": 90
       }
+    },
+    {
+      "type": "wokwi-ft6236",
+      "id": "touch",
+      "top": 0,
+      "left": 140,
+      "rotate": 0,
+      "attrs": {}
     }
   ],
   "connections": [
@@ -33,7 +41,11 @@
     ["esp32:D4", "display:RST"],
     ["esp32:GND.1", "display:GND"],
     ["esp32:3V3.1", "display:VCC"],
-    ["esp32:D15", "display:BL"]
+    ["esp32:D15", "display:BL"],
+    ["esp32:D21", "touch:SDA"],
+    ["esp32:D22", "touch:SCL"],
+    ["esp32:3V3.2", "touch:VCC"],
+    ["esp32:GND.2", "touch:GND"]
   ],
   "dependencies": {}
 }

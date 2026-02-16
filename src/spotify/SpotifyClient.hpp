@@ -14,6 +14,8 @@
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "AuthManager.hpp"
+#include "errors.h"
+#include "result.h"
 
 // Spotify API endpoints
 #define SPOTIFY_API_BASE "https://api.spotify.com/v1"
@@ -130,11 +132,17 @@ public:
     bool updateNowPlaying();
 
     /**
+     * @brief Update now playing info with error details
+     * @return Status with error information
+     */
+    Status updateNowPlayingEx();
+
+    /**
      * @brief Get current track info
      */
     TrackInfo getCurrentTrack() const { return currentTrack; }
 
-    // Playback controls
+    // Playback controls (bool - backward compatibility)
     bool play();
     bool pause();
     bool togglePlay();
@@ -142,26 +150,52 @@ public:
     bool previousTrack();
     bool seek(int positionMs);
 
+    // Playback controls (Status - with error details)
+    Status playEx();
+    Status pauseEx();
+    Status togglePlayEx();
+    Status nextTrackEx();
+    Status previousTrackEx();
+    Status seekEx(int positionMs);
+
     // Volume control
     bool setVolume(int volumePercent);
     bool adjustVolume(int delta);
     int getVolume();
+
+    // Volume control (Status - with error details)
+    Status setVolumeEx(int volumePercent);
 
     // Track management
     bool saveTrack(const String& trackId);
     bool removeTrack(const String& trackId);
     bool isTrackSaved(const String& trackId);
 
+    // Track management (Status - with error details)
+    Status saveTrackEx(const String& trackId);
+    Status removeTrackEx(const String& trackId);
+    Result<bool> isTrackSavedEx(const String& trackId);
+
     // Device management
     std::vector<DeviceInfo> getDevices();
     bool setDevice(const String& deviceId);
     DeviceInfo getCurrentDevice();
+
+    // Device management (Result/Status - with error details)
+    Result<std::vector<DeviceInfo>> getDevicesEx();
+    Status setDeviceEx(const String& deviceId);
 
     // Playlists
     std::vector<PlaylistInfo> getPlaylists();
     PlaylistInfo getPlaylist(const String& playlistId);
     bool playPlaylist(const String& playlistId, const String& deviceId = "");
     bool playTrack(const String& trackUri, const String& deviceId = "");
+
+    // Playlists (Result/Status - with error details)
+    Result<std::vector<PlaylistInfo>> getPlaylistsEx();
+    Result<PlaylistInfo> getPlaylistEx(const String& playlistId);
+    Status playPlaylistEx(const String& playlistId, const String& deviceId = "");
+    Status playTrackEx(const String& trackUri, const String& deviceId = "");
 
     // Search
     struct SearchResult {
@@ -170,8 +204,14 @@ public:
     };
     SearchResult search(const String& query, int limit = 20);
 
+    // Search (Result - with error details)
+    Result<SearchResult> searchEx(const String& query, int limit = 20);
+
     // Image loading
     bool downloadImage(const String& url, const String& path);
+
+    // Image loading (Status - with error details)
+    Status downloadImageEx(const String& url, const String& path);
 
 private:
     /**
@@ -180,9 +220,19 @@ private:
     bool httpGet(const String& endpoint, JsonDocument& doc, int expectedCode = 200);
 
     /**
+     * @brief Make authenticated HTTP GET request with error details
+     */
+    HttpResult httpGetEx(const String& endpoint);
+
+    /**
      * @brief Make authenticated HTTP PUT request
      */
     bool httpPut(const String& endpoint, const String& body = "", int expectedCode = 204);
+
+    /**
+     * @brief Make authenticated HTTP PUT request with error details
+     */
+    HttpResult httpPutEx(const String& endpoint, const String& body = "");
 
     /**
      * @brief Make authenticated HTTP POST request
@@ -190,9 +240,19 @@ private:
     bool httpPost(const String& endpoint, const String& body = "", int expectedCode = 201);
 
     /**
+     * @brief Make authenticated HTTP POST request with error details
+     */
+    HttpResult httpPostEx(const String& endpoint, const String& body = "");
+
+    /**
      * @brief Make authenticated HTTP DELETE request
      */
     bool httpDelete(const String& endpoint, int expectedCode = 200);
+
+    /**
+     * @brief Make authenticated HTTP DELETE request with error details
+     */
+    HttpResult httpDeleteEx(const String& endpoint);
 
     /**
      * @brief Enforce rate limiting
@@ -203,6 +263,11 @@ private:
      * @brief Refresh access token if needed
      */
     bool ensureValidToken();
+
+    /**
+     * @brief Check and refresh token if expired
+     */
+    bool refreshTokenIfNeeded();
 
     /**
      * @brief Parse track from JSON
@@ -220,7 +285,9 @@ private:
     // Tokens
     String accessToken;
     String refreshToken;
-    unsigned long tokenExpiryTime;
+    unsigned long tokenAcquiredAt;   // When token was acquired (overflow-safe)
+    unsigned long tokenValidForMs;   // How long token is valid in ms
+    unsigned long tokenExpiryTime;   // For backwards compatibility (deprecated)
 
     // HTTP client
     WiFiClientSecure client;

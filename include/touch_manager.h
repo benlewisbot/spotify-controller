@@ -13,9 +13,9 @@ enum TouchController {
 };
 
 struct TouchPoint {
-  uint16_t x;
-  uint16_t y;
-  bool pressed;
+  uint16_t x = 0;
+  uint16_t y = 0;
+  bool pressed = false;
 };
 
 class TouchManager {
@@ -24,8 +24,28 @@ private:
   uint8_t touchIntPin;
   bool initialized;
 
+  // ISR-safe flag for interrupt-based touch detection (volatile for ISR access)
+  volatile bool touchDetected = false;
+  volatile unsigned long lastTouchIRQTime = 0;
+
 public:
   TouchManager() : controller(TOUCH_CONTROLLER), touchIntPin(TOUCH_INT), initialized(false) {
+  }
+
+  // Call from ISR when touch interrupt fires
+  void IRAM_ATTR onTouchInterrupt() {
+    touchDetected = true;
+    lastTouchIRQTime = millis();
+  }
+
+  // Clear touch flag (call after processing touch)
+  void clearTouchFlag() {
+    touchDetected = false;
+  }
+
+  // Check if touch was detected via interrupt
+  bool hasPendingTouch() const {
+    return touchDetected;
   }
 
   void init() {

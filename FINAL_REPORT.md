@@ -2,7 +2,7 @@
 
 **Session:** agent:main:subagent:27a1b64a-b298-4cd4-8606-e893806b4f84
 **Date:** 2026-02-02 09:00
-**Project:** /home/tod/clawd/projects/spotify-controller/
+**Project:** /home/tod/.openclaw/workspace/projects/spotify-controller/
 **Status:** ✅ COMPLETED
 
 ---
@@ -67,12 +67,12 @@ All tasks have been completed successfully! The GUI is ready for testing tomorro
 https://wokwi.com/projects/new/esp32
 
 # Copy code from
-/home/tod/clawd/projects/spotify-controller/wokwi/sketch.ino
+/home/tod/.openclaw/workspace/projects/spotify-controller/wokwi/sketch.ino
 ```
 
 ### Option 2: Hardware - 5 Minutes
 ```bash
-cd /home/tod/clawd/projects/spotify-controller
+cd /home/tod/.openclaw/workspace/projects/spotify-controller
 ./upload.sh
 ```
 

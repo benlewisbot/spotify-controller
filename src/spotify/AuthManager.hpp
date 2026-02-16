@@ -100,6 +100,11 @@ public:
     String refreshAccessToken(const String& refreshToken);
 
     /**
+     * @brief Check if access token is expired (overflow-safe)
+     */
+    bool isTokenExpired() const;
+
+    /**
      * @brief Generate PKCE code verifier
      */
     String generateCodeVerifier();
@@ -157,7 +162,9 @@ private:
     // Tokens
     String accessToken;
     String refreshToken;
-    unsigned long tokenExpiryTime;
+    unsigned long tokenAcquiredAt;   // When token was acquired (overflow-safe)
+    unsigned long tokenValidForMs;   // How long token is valid in ms
+    unsigned long tokenExpiryTime;   // For backwards compatibility (deprecated)
 
     // PKCE
     String codeVerifier;

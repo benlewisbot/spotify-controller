@@ -68,7 +68,7 @@
 
 4. **Build & Upload**
    ```bash
-   cd /home/tod/clawd/projects/spotify-controller
+   cd /home/tod/.openclaw/workspace/projects/spotify-controller
 
    # Option A: Full upload (recommended)
    ./upload.sh

@@ -4,7 +4,7 @@
 
 set -e
 
-PROJECT_DIR="/home/tod/clawd/projects/spotify-controller"
+PROJECT_DIR="/home/tod/.openclaw/workspace/projects/spotify-controller"
 cd "$PROJECT_DIR"
 
 echo "========================================="
