@@ -25,6 +25,8 @@ struct NetworkInfo {
     bool connected;
     
     NetworkInfo() : rssi(0), secured(false), connected(false) {}
+    NetworkInfo(const String& s, int r, bool sec, bool conn)
+        : ssid(s), rssi(r), secured(sec), connected(conn) {}
 };
 
 /**
@@ -72,6 +74,9 @@ private:
     void createNetworkList();
     void createStaticIPSection();
     void createNetworkItem(const NetworkInfo& network, int yPos);
+    void createPasswordDialog(const String& ssid);
+    void connectToNetwork(const String& ssid, const String& password);
+    void syncCurrentStatus();
     int getSignalStrength(int rssi);
     const char* getSecurityIcon(bool secured);
     
@@ -85,11 +90,14 @@ private:
     lv_obj_t* scanButton;
     lv_obj_t* staticIPSection;
     lv_obj_t* staticIPSwitch;
+    lv_obj_t* passwordOverlay = nullptr;
     
     std::vector<NetworkInfo> networks;
     bool isScanning;
     bool connected;
     String currentSSID;
+    String pendingSSID;
+    lv_timer_t* scanTimer = nullptr;
 };
 
 } // namespace ui

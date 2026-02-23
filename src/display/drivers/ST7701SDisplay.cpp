@@ -4,6 +4,10 @@
  */
 
 #include "ST7701SDisplay.hpp"
+#include <esp_log.h>
+
+// Global pointer for GT911Touch to access the display's LovyanGFX touch
+static ST7701SDisplay* g_st7701sInstance = nullptr;
 
 ST7701SDisplay::ST7701SDisplay()
     : lgfx(nullptr)
@@ -15,19 +19,32 @@ ST7701SDisplay::ST7701SDisplay()
 }
 
 ST7701SDisplay::~ST7701SDisplay() {
+    g_st7701sInstance = nullptr;
     delete lgfx;
 }
 
 bool ST7701SDisplay::init() {
-    Serial.println("  📺 Initializing ST7701S...");
+    ESP_LOGI("ST7701S", "Initializing display...");
 
+    // Create LovyanGFX with Panel_ST7701_guition_esp32_4848S040
+    // This panel type has built-in SPI init commands for the Guition board
     lgfx = new LGFX_ST7701S();
     lgfx->init();
+
+    // Backlight
     lgfx->setBrightness(currentBrightness);
+    // Force backlight GPIO HIGH as fallback (PWM may not work on all units)
+    pinMode(TFT_BL, OUTPUT);
+    digitalWrite(TFT_BL, HIGH);
+
+    // Clear screen
     lgfx->fillScreen(TFT_BLACK);
 
+    // Store global pointer for touch access
+    g_st7701sInstance = this;
+
     initialized = true;
-    Serial.printf("  ✅ ST7701S initialized (%dx%d)\n", width, height);
+    ESP_LOGI("ST7701S", "init complete (%dx%d)", width, height);
     return true;
 }
 
@@ -87,7 +104,7 @@ bool ST7701SDisplay::isTouchPressed() {
     return lgfx->getTouch(&tx, &ty);
 }
 
-// GT911 Touch Implementation
+// GT911 Touch Implementation - delegates to ST7701SDisplay's LovyanGFX
 
 GT911Touch::GT911Touch()
     : initialized(false)
@@ -100,8 +117,7 @@ GT911Touch::~GT911Touch() {
 }
 
 bool GT911Touch::init() {
-    // Touch is initialized as part of the display
-    // The LovyanGFX library handles this internally
+    // Touch is initialized as part of the LovyanGFX display
     initialized = true;
     return true;
 }
@@ -109,13 +125,19 @@ bool GT911Touch::init() {
 bool GT911Touch::read(int16_t& x, int16_t& y) {
     if (!initialized) return false;
     
-    // Touch reading is handled by LovyanGFX internally
-    // This is called by the LVGL touch callback
+    // Delegate to the global ST7701SDisplay instance which has the LovyanGFX object
+    if (g_st7701sInstance) {
+        return g_st7701sInstance->readTouch(x, y);
+    }
     return false;
 }
 
 bool GT911Touch::isTouched() {
     if (!initialized) return false;
+    
+    if (g_st7701sInstance) {
+        return g_st7701sInstance->isTouchPressed();
+    }
     return false;
 }
 

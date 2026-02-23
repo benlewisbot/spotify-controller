@@ -3,7 +3,7 @@
  * @brief Spotify OAuth 2.0 Authentication Manager
  *
  * Handles OAuth 2.0 authentication flow with PKCE support.
- * Provides captive portal for initial device setup.
+ * Provides captive portal for initial device setup (WiFi + Spotify).
  */
 
 #ifndef AUTH_MANAGER_HPP
@@ -12,29 +12,53 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <WiFi.h>
-#include <WebServer.h>  // Standard ESP32 WebServer (synchronous)
+#include <WebServer.h>
+#include <DNSServer.h>
 #include <WiFiClientSecure.h>
+#include <esp_log.h>
+#include <functional>
 
 // Spotify Auth endpoints
 #define SPOTIFY_AUTH_URL "https://accounts.spotify.com/authorize"
 #define SPOTIFY_TOKEN_URL "https://accounts.spotify.com/api/token"
 
 // Spotify OAuth Scopes
-#define SPOTIFY_SCOPES "user-read-playback-state user-modify-playback-state user-read-currently-playing user-library-read playlist-read-private playlist-read-collaborative"
+#define SPOTIFY_SCOPES \
+    "user-read-playback-state " \
+    "user-modify-playback-state " \
+    "user-read-currently-playing " \
+    "user-read-playback-position " \
+    "user-library-read " \
+    "user-library-modify " \
+    "playlist-read-private " \
+    "playlist-read-collaborative"
 
 // Auth server settings
-#define AUTH_SERVER_PORT 8080
-#define AUTH_TIMEOUT_MS 300000  // 5 minutes
+#define AUTH_SERVER_PORT 80
+#define AUTH_TIMEOUT_MS 600000  // 10 minutes
+
+// Spotify requires HTTPS redirect URIs except for loopback addresses.
+// We use 127.0.0.1 loopback — the browser will fail to connect there,
+// but the user copies the redirected URL and pastes it into the device's web page.
+#define SPOTIFY_REDIRECT_URI "http://127.0.0.1:8888/callback"
 
 /**
  * @brief Auth State Enum
  */
 enum class AuthState {
     NONE,
-    WAITING_FOR_AUTH,
+    SETUP_WIFI,          // AP mode: waiting for WiFi credentials
+    SETUP_CONNECTING,    // Connecting to WiFi after setup
+    WAITING_FOR_AUTH,    // WiFi connected: waiting for Spotify OAuth
     AUTHENTICATED,
     ERROR
 };
+
+/**
+ * @brief Callback types for setup events
+ */
+using WiFiCredentialsCb = std::function<void(const String& ssid, const String& password)>;
+using ClientIdCb = std::function<void(const String& clientId)>;
 
 /**
  * @brief Spotify Authentication Manager Class
@@ -44,115 +68,60 @@ public:
     AuthManager();
     ~AuthManager();
 
-    /**
-     * @brief Initialize with client credentials
-     */
     void init(const String& clientId, const String& clientSecret);
-
-    /**
-     * @brief Update auth state (call periodically)
-     */
     void update();
 
-    /**
-     * @brief Start auth server for captive portal
-     */
+    // Server lifecycle
     void startAuthServer();
-
-    /**
-     * @brief Stop auth server
-     */
+    void startSetupServer();   // AP mode captive portal
     void stopAuthServer();
 
-    /**
-     * @brief Get auth state
-     */
+    // State
     AuthState getState() const { return state; }
-
-    /**
-     * @brief Check if authenticated
-     */
     bool isAuthenticated() const { return state == AuthState::AUTHENTICATED; }
 
-    /**
-     * @brief Get access token
-     */
+    // Tokens
     String getAccessToken() const { return accessToken; }
-
-    /**
-     * @brief Get refresh token
-     */
     String getRefreshToken() const { return refreshToken; }
 
-    /**
-     * @brief Get authorization URL
-     */
+    // Auth URL
     String getAuthUrl();
 
-    /**
-     * @brief Exchange auth code for tokens
-     */
+    // Token operations
     bool exchangeCodeForTokens(const String& code);
-
-    /**
-     * @brief Refresh access token
-     */
     String refreshAccessToken(const String& refreshToken);
-
-    /**
-     * @brief Check if access token is expired (overflow-safe)
-     */
     bool isTokenExpired() const;
 
-    /**
-     * @brief Generate PKCE code verifier
-     */
+    // PKCE helpers
     String generateCodeVerifier();
-
-    /**
-     * @brief Generate PKCE code challenge
-     */
     String generateCodeChallenge(const String& verifier);
-
-    /**
-     * @brief Generate random state string
-     */
     String generateState();
 
+    // Set client ID (from setup form)
+    void setClientId(const String& id) { clientId = id; }
+
+    // Callbacks for setup events
+    void onWiFiCredentials(WiFiCredentialsCb cb) { wifiCredentialsCb = cb; }
+    void onClientIdSet(ClientIdCb cb) { clientIdCb = cb; }
+
+    // Notify that WiFi connected (called by App after credentials applied)
+    void onWiFiConnected();
+
 private:
-    /**
-     * @brief Handle web server requests
-     */
+    // Web handlers
     void handleWebServer();
+    void handleSetupPage();      // GET / in AP mode
+    void handleSetupSave();      // POST /save in AP mode
+    void handleIndex();          // GET / in STA mode (Spotify OAuth)
+    void handleCallback();       // GET /callback from Spotify
+    void handleSubmitCode();     // POST /submit-code (manual URL paste, JSON body)
+    void handleAuthStatus();     // GET /auth-status (JSON polling endpoint)
+    void handleCaptiveRedirect(); // Redirect all unknown to /
 
-    /**
-     * @brief Serve index page
-     */
-    void handleIndex();
-
-    /**
-     * @brief Handle callback from Spotify
-     */
-    void handleCallback();
-
-    /**
-     * @brief Generate secure random string
-     */
+    // Crypto helpers
     String secureRandom(size_t length);
-
-    /**
-     * @brief Base64 URL encode
-     */
     String base64UrlEncode(const String& input);
-
-    /**
-     * @brief Base64 URL decode
-     */
     String base64UrlDecode(const String& input);
-
-    /**
-     * @brief SHA-256 hash
-     */
     String sha256(const String& input);
 
     // Client credentials
@@ -162,23 +131,28 @@ private:
     // Tokens
     String accessToken;
     String refreshToken;
-    unsigned long tokenAcquiredAt;   // When token was acquired (overflow-safe)
-    unsigned long tokenValidForMs;   // How long token is valid in ms
-    unsigned long tokenExpiryTime;   // For backwards compatibility (deprecated)
+    unsigned long tokenAcquiredAt;
+    unsigned long tokenValidForMs;
+    unsigned long tokenExpiryTime;
 
     // PKCE
     String codeVerifier;
     String codeChallenge;
-    String oauthState;  // OAuth state parameter (different from AuthState enum)
+    String oauthState;
 
-    // Web server
+    // Web server + DNS
     WebServer* authServer;
+    DNSServer* dnsServer;
 
     // State
     AuthState state;
     unsigned long authStartTime;
-
     bool initialized;
+    bool apMode;   // true = captive portal mode, false = STA OAuth mode
+
+    // Callbacks
+    WiFiCredentialsCb wifiCredentialsCb;
+    ClientIdCb clientIdCb;
 };
 
 #endif // AUTH_MANAGER_HPP

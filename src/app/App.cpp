@@ -1,9 +1,13 @@
 /**
  * @file App.cpp
  * @brief Main Application Controller Implementation
+ *
+ * Manages initialization, main loop, and subsystem coordination.
+ * Boot flow: Config -> Display -> Splash -> WiFi -> Spotify -> UI
  */
 
 #include "App.hpp"
+#include <esp_log.h>
 
 // Include subsystem headers
 #include "../config/Config.hpp"
@@ -12,10 +16,14 @@
 #include "../spotify/SpotifyClient.hpp"
 #include "../spotify/AuthManager.hpp"
 #include "../ui/WindowManager.hpp"
-// #include "../ui/screens/NowPlaying.hpp"  // Disabled for minimal build
+#include "../ui/screens/NowPlaying.hpp"
+#include "../ui/screens/SplashScreen.hpp"
 #include "RuntimeConfig.hpp"
 
 #include <WiFi.h>
+
+// Splash screen (managed separately since it appears before WindowManager)
+static ui::SplashScreen* splashScreen = nullptr;
 
 App::App()
     : initialized(false)
@@ -29,69 +37,81 @@ App::App()
 }
 
 App::~App() {
-    // Cleanup subsystems in reverse order
     delete windowManager;
     delete spotifyClient;
     delete authManager;
-    delete displayManager;
+    // displayManager is a singleton, don't delete
     delete wifiManager;
-    delete configManager;
+    // configManager is a singleton (getInstance()), don't delete
+    if (splashScreen) {
+        delete splashScreen;
+        splashScreen = nullptr;
+    }
 }
 
 bool App::init() {
-    Serial.println("\n========================================");
-    Serial.println("  Spotify Controller ESP32");
-    Serial.println("  Version: 1.0.0 (Phase 1 MVP)");
-    Serial.println("========================================\n");
+    ESP_LOGI("APP", "Spotify Controller v1.0.0");
 
-    // Initialize subsystems in order
     setState(AppState::INIT);
 
+    // 1. Config
     if (!initConfig()) {
-        Serial.println("❌ Config initialization failed");
+        ESP_LOGE("APP", "Config init failed");
         return false;
     }
-    Serial.println("✅ Config initialized");
 
+    // 2. Logger
     if (!initLogger()) {
-        Serial.println("❌ Logger initialization failed");
+        ESP_LOGE("APP", "Logger init failed");
         return false;
     }
-    Serial.println("✅ Logger initialized");
+
+    // 3. Display
+    if (!initDisplay()) {
+        ESP_LOGE("APP", "Display init failed");
+        return false;
+    }
+
+    // 4. Splash screen
+    splashScreen = new ui::SplashScreen(lv_scr_act());
+    splashScreen->setStatus("Connecting to WiFi...");
+    displayManager->update();
+
+    // 5. WiFi
+    splashScreen->setStatus("Connecting to WiFi...");
+    displayManager->update();
 
     if (!initWiFi()) {
-        Serial.println("❌ WiFi initialization failed");
-        return false;
+        ESP_LOGW("APP", "WiFi failed, starting AP mode");
+        splashScreen->setStatus("Starting setup mode...");
+        displayManager->update();
     }
-    Serial.println("✅ WiFi initialized");
 
-    if (!initDisplay()) {
-        Serial.println("❌ Display initialization failed");
-        return false;
-    }
-    Serial.println("✅ Display initialized");
+    // 6. Spotify
+    splashScreen->setStatus("Initializing Spotify...");
+    displayManager->update();
 
     if (!initSpotify()) {
-        Serial.println("❌ Spotify initialization failed");
+        ESP_LOGE("APP", "Spotify init failed");
         return false;
     }
-    Serial.println("✅ Spotify initialized");
+
+    // 7. UI
+    splashScreen->setStatus("Loading UI...");
+    displayManager->update();
 
     if (!initUI()) {
-        Serial.println("❌ UI initialization failed");
+        ESP_LOGE("APP", "UI init failed");
         return false;
     }
-    Serial.println("✅ UI initialized");
 
-    // Register event handlers
+    // 8. Hide splash, show main screen
+    splashScreen->hide();
     registerEventHandlers();
 
     initialized = true;
     setState(AppState::READY);
-
-    Serial.println("\n========================================");
-    Serial.println("  🎵 Spotify Controller Ready!");
-    Serial.println("========================================\n");
+    ESP_LOGI("APP", "Ready");
 
     return true;
 }
@@ -104,7 +124,7 @@ void App::loop() {
     // Execute scheduled tasks
     executeScheduledTasks();
 
-    // Update window manager (LVGL tasks)
+    // Update window manager (LVGL tasks + NowPlaying polling)
     if (windowManager) {
         windowManager->update();
     }
@@ -114,22 +134,39 @@ void App::loop() {
         wifiManager->update();
     }
 
+    // Update auth manager (handles captive portal + OAuth web server)
+    if (authManager) {
+        authManager->update();
+
+        // Detect WiFi connection during captive portal setup
+        static bool wasConnected = false;
+        bool nowConnected = (WiFi.status() == WL_CONNECTED);
+        if (nowConnected && !wasConnected) {
+            authManager->onWiFiConnected();
+        }
+        wasConnected = nowConnected;
+
+        // Check if auth completed
+        if (state == AppState::AUTH_REQUIRED && authManager->isAuthenticated()) {
+            onSpotifyAuthenticated();
+        }
+    }
+
     // Poll Spotify status (periodically)
     if (spotifyClient && state == AppState::NOW_PLAYING) {
         static unsigned long lastPoll = 0;
-        if (millis() - lastPoll >= SPOTIFY_POLL_INTERVAL_MS) {
+        unsigned long now = millis();
+        if (now - lastPoll >= SPOTIFY_POLL_INTERVAL_MS) {
             spotifyClient->updateNowPlaying();
-            lastPoll = millis();
+            lastPoll = now;
         }
     }
 }
 
 void App::setState(AppState newState) {
     if (state != newState) {
-        Serial.printf("🔄 State change: %d -> %d\n", state, newState);
+        ESP_LOGI("APP", "State: %d -> %d", (int)state, (int)newState);
         state = newState;
-
-        // Publish state change event
         eventBus.publish(Event(EventType::STATE_CHANGED, static_cast<int>(newState)));
     }
 }
@@ -147,40 +184,57 @@ void App::refreshUI() {
     }
 }
 
-// Initialization methods
+// ===== Initialization Methods =====
 
 bool App::initConfig() {
-    configManager = new ConfigManager();
+    // Use the singleton instance — DisplayManager and other code also use
+    // ConfigManager::getInstance(), so we must use the same object.
+    configManager = &ConfigManager::getInstance();
     bool configOk = configManager->init();
-    
-    // Initialize RuntimeConfig manager
     bool runtimeConfigOk = RuntimeConfigManager::getInstance().begin();
-    
     return configOk && runtimeConfigOk;
 }
 
 bool App::initLogger() {
-    // Logger is already initialized via Serial
     return true;
 }
 
 bool App::initWiFi() {
     wifiManager = new WiFiManager();
 
-    // Register event handlers
     eventBus.subscribe(EventType::WIFI_CONNECTED,
         [this](const Event& e) { this->onWiFiConnected(); });
 
     eventBus.subscribe(EventType::WIFI_DISCONNECTED,
         [this](const Event& e) { this->onWiFiDisconnected(); });
 
-    // Connect to WiFi
-    if (!wifiManager->connect(configManager->getWiFiSSID(),
-                               configManager->getWiFiPassword())) {
-        Serial.println("⚠️  WiFi connection failed, will retry...");
-        return false;
+    String ssid = configManager->getWiFiSSID();
+    String password = configManager->getWiFiPassword();
+
+    // If no WiFi credentials, start AP mode for captive portal setup
+    if (ssid.isEmpty()) {
+        ESP_LOGI("APP", "No WiFi creds, starting AP mode");
+        wifiManager->startAPMode("SpotifyController");
+        return true;
     }
 
+    // Try to connect (non-blocking start)
+    wifiManager->connect(ssid, password);
+
+    // Wait for connection with splash screen updates
+    unsigned long startMs = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startMs < 15000) {
+        delay(250);
+        if (displayManager) displayManager->update();
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        ESP_LOGI("APP", "WiFi connected: %s", WiFi.localIP().toString().c_str());
+        return true;
+    }
+
+    ESP_LOGW("APP", "WiFi timeout, starting AP mode");
+    wifiManager->startAPMode("SpotifyController");
     return true;
 }
 
@@ -191,35 +245,57 @@ bool App::initDisplay() {
         return false;
     }
 
-    // Wait for display to be ready
     delay(100);
-
     return true;
 }
 
 bool App::initSpotify() {
-    // Create authentication manager
     authManager = new AuthManager();
     authManager->init(
         configManager->getSpotifyClientId(),
         configManager->getSpotifyClientSecret()
     );
 
-    // Create Spotify client
-    spotifyClient = new SpotifyClient(authManager);
+    // Register callbacks for captive portal setup
+    authManager->onWiFiCredentials([this](const String& ssid, const String& password) {
+        ESP_LOGI("APP", "Setup: WiFi creds received for '%s'", ssid.c_str());
+        configManager->setWiFiSSID(ssid);
+        configManager->setWiFiPassword(password);
+        configManager->save();
 
-    // Check if we have stored tokens
+        // Connect to WiFi (switch from AP to STA+AP mode temporarily)
+        WiFi.mode(WIFI_AP_STA);
+        WiFi.begin(ssid.c_str(), password.c_str());
+    });
+
+    authManager->onClientIdSet([this](const String& id) {
+        ESP_LOGI("APP", "Setup: Spotify client ID set");
+        configManager->setSpotifyClientId(id);
+        configManager->save();
+    });
+
+    spotifyClient = new SpotifyClient(authManager);
+    spotifyClient->init();
+
+    // Check for stored tokens
     if (configManager->hasStoredTokens()) {
-        Serial.println("🎫 Found stored tokens, attempting to use...");
-        String accessToken = configManager->getAccessToken();
-        String refreshToken = configManager->getRefreshToken();
-        spotifyClient->setTokens(accessToken, refreshToken);
+        ESP_LOGI("APP", "Using stored Spotify tokens");
+        spotifyClient->setTokens(
+            configManager->getAccessToken(),
+            configManager->getRefreshToken()
+        );
     } else {
-        Serial.println("🔐 No stored tokens found, authentication required");
+        ESP_LOGI("APP", "No tokens, auth required");
         setState(AppState::AUTH_REQUIRED);
+
+        // In AP mode: start captive portal setup; in STA mode: start OAuth
+        if (wifiManager && wifiManager->getState() == WiFiState::AP_MODE) {
+            authManager->startSetupServer();
+        } else {
+            authManager->startAuthServer();
+        }
     }
 
-    // Register Spotify event handlers
     eventBus.subscribe(EventType::SPOTIFY_AUTHENTICATED,
         [this](const Event& e) { this->onSpotifyAuthenticated(); });
 
@@ -239,44 +315,55 @@ bool App::initUI() {
     windowManager = new WindowManager(displayManager);
     windowManager->init();
 
-    // Show initial screen based on state
     if (state == AppState::AUTH_REQUIRED) {
         windowManager->showAuthScreen();
     } else {
         windowManager->showNowPlaying();
+        setState(AppState::NOW_PLAYING);
     }
 
     return true;
 }
 
-// Event handlers
+// ===== Event Handlers =====
 
 void App::onWiFiConnected() {
-    Serial.println("📶 WiFi connected!");
-    Serial.printf("  IP: %s\n", WiFi.localIP().toString().c_str());
+    ESP_LOGI("APP", "WiFi connected, IP: %s", WiFi.localIP().toString().c_str());
 
-    // If we need auth, start auth server
     if (state == AppState::AUTH_REQUIRED && authManager) {
         authManager->startAuthServer();
     }
 }
 
 void App::onWiFiDisconnected() {
-    Serial.println("📶 WiFi disconnected, attempting to reconnect...");
+    ESP_LOGW("APP", "WiFi disconnected");
 }
 
 void App::onSpotifyAuthenticated() {
-    Serial.println("✅ Spotify authenticated!");
+    ESP_LOGI("APP", "Spotify authenticated");
 
-    // Save tokens
-    if (spotifyClient && configManager) {
-        configManager->saveTokens(
-            spotifyClient->getAccessToken(),
-            spotifyClient->getRefreshToken()
+    // Bridge tokens from AuthManager to SpotifyClient
+    if (authManager && spotifyClient) {
+        spotifyClient->setTokens(
+            authManager->getAccessToken(),
+            authManager->getRefreshToken()
         );
     }
 
-    // Show now playing screen
+    // Save tokens to config
+    if (authManager && configManager) {
+        configManager->saveTokens(
+            authManager->getAccessToken(),
+            authManager->getRefreshToken()
+        );
+    }
+
+    // Stop auth server
+    if (authManager) {
+        authManager->stopAuthServer();
+    }
+
+    // Show now playing
     if (windowManager) {
         windowManager->showNowPlaying();
     }
@@ -285,7 +372,7 @@ void App::onSpotifyAuthenticated() {
 }
 
 void App::onSpotifyAuthError() {
-    Serial.println("❌ Spotify authentication error");
+    ESP_LOGE("APP", "Spotify auth error");
     setState(AppState::AUTH_REQUIRED);
 
     if (windowManager) {
@@ -294,17 +381,15 @@ void App::onSpotifyAuthError() {
 }
 
 void App::onPlaybackChanged() {
-    // Refresh UI
     refreshUI();
 }
 
 void App::onTrackChanged() {
-    // Refresh UI - track changed means we need to update album art too
     refreshUI();
 }
 
 void App::registerEventHandlers() {
-    // Already registered in init methods
+    // Event handlers registered in init methods
 }
 
 void App::executeScheduledTasks() {
@@ -312,9 +397,7 @@ void App::executeScheduledTasks() {
 
     for (auto it = scheduledTasks.begin(); it != scheduledTasks.end(); ) {
         if (now >= it->executeTime) {
-            // Execute task
             it->task();
-            // Remove from list
             it = scheduledTasks.erase(it);
         } else {
             ++it;

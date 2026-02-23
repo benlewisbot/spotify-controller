@@ -12,9 +12,10 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <LittleFS.h>
+#include <esp_log.h>
 
 // Configuration file path
-#define CONFIG_FILE "/spotify_config.json"
+#define RUNTIME_CONFIG_FILE "/spotify_config.json"
 
 // Default values
 #define DEFAULT_BRIGHTNESS 75
@@ -96,30 +97,35 @@ struct RuntimeConfig {
     
     // JSON serialization
     void toJson(JsonObject doc) {
-        doc["display"]["brightness"] = display.brightness;
-        doc["display"]["rotation"] = display.rotation;
-        doc["display"]["screensaverTimeout"] = display.screensaverTimeout;
-        doc["display"]["screensaverEnabled"] = display.screensaverEnabled;
+        JsonObject d = doc.createNestedObject("display");
+        d["brightness"] = display.brightness;
+        d["rotation"] = display.rotation;
+        d["screensaverTimeout"] = display.screensaverTimeout;
+        d["screensaverEnabled"] = display.screensaverEnabled;
         
-        doc["wifi"]["autoReconnect"] = wifi.autoReconnect;
-        doc["wifi"]["connectionTimeout"] = wifi.connectionTimeout;
-        doc["wifi"]["lastSSID"] = wifi.lastSSID;
+        JsonObject w = doc.createNestedObject("wifi");
+        w["autoReconnect"] = wifi.autoReconnect;
+        w["connectionTimeout"] = wifi.connectionTimeout;
+        w["lastSSID"] = wifi.lastSSID;
         
-        doc["spotify"]["autoPlay"] = spotify.autoPlay;
-        doc["spotify"]["showExplicit"] = spotify.showExplicit;
-        doc["spotify"]["deviceName"] = spotify.deviceName;
-        doc["spotify"]["userId"] = spotify.userId;
-        doc["spotify"]["userEmail"] = spotify.userEmail;
+        JsonObject s = doc.createNestedObject("spotify");
+        s["autoPlay"] = spotify.autoPlay;
+        s["showExplicit"] = spotify.showExplicit;
+        s["deviceName"] = spotify.deviceName;
+        s["userId"] = spotify.userId;
+        s["userEmail"] = spotify.userEmail;
         
-        doc["interface"]["touchSound"] = interface.touchSound;
-        doc["interface"]["hapticFeedback"] = interface.hapticFeedback;
-        doc["interface"]["showBatteryLevel"] = interface.showBatteryLevel;
-        doc["interface"]["uiScale"] = interface.uiScale;
+        JsonObject i = doc.createNestedObject("interface");
+        i["touchSound"] = interface.touchSound;
+        i["hapticFeedback"] = interface.hapticFeedback;
+        i["showBatteryLevel"] = interface.showBatteryLevel;
+        i["uiScale"] = interface.uiScale;
         
-        doc["system"]["firmwareVersion"] = system.firmwareVersion;
-        doc["system"]["buildDate"] = system.buildDate;
-        doc["system"]["deviceId"] = system.deviceId;
-        doc["system"]["bootCount"] = system.bootCount;
+        JsonObject sys = doc.createNestedObject("system");
+        sys["firmwareVersion"] = system.firmwareVersion;
+        sys["buildDate"] = system.buildDate;
+        sys["deviceId"] = system.deviceId;
+        sys["bootCount"] = system.bootCount;
     }
     
     // JSON deserialization with NULL SAFETY
@@ -190,29 +196,23 @@ public:
      * @brief Initialize configuration system
      */
     bool begin() {
-        // Initialize mutex
         configMutex = xSemaphoreCreateMutex();
         if (configMutex == nullptr) {
-            Serial.println("❌ Failed to create config mutex");
+            ESP_LOGE("RtCfg", "Failed to create mutex");
             return false;
         }
 
-        if (!LittleFS.begin()) {
-            Serial.println("❌ Failed to mount LittleFS for config");
-            return false;
-        }
+        // LittleFS is already mounted by ConfigManager::init()
+        // No need to call LittleFS.begin() again
 
-        // Load existing config or create default
         if (!load()) {
-            Serial.println("⚠️  No config file found, creating defaults");
-            save();
+            save();  // Create default config file
         }
 
-        // Increment boot count
         config.system.bootCount++;
         save();
 
-        Serial.printf("✅ RuntimeConfig initialized (Boot #%lu)\n", config.system.bootCount);
+        ESP_LOGI("RtCfg", "Boot #%lu", config.system.bootCount);
         return true;
     }
     
@@ -225,29 +225,24 @@ public:
      * @brief Save configuration to file
      */
     bool save() {
-        // Acquire mutex for thread-safe file operations
         if (configMutex == nullptr || xSemaphoreTake(configMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
-            Serial.println("❌ Failed to acquire config mutex");
+            ESP_LOGE("RtCfg", "Mutex acquire failed");
             return false;
         }
 
         DynamicJsonDocument doc(2048);
         config.toJson(doc.as<JsonObject>());
 
-        File file = LittleFS.open(CONFIG_FILE, "w");
+        File file = LittleFS.open(RUNTIME_CONFIG_FILE, "w");
         if (!file) {
-            Serial.println("❌ Failed to open config file for writing");
+            ESP_LOGE("RtCfg", "Failed to open config for writing");
             xSemaphoreGive(configMutex);
             return false;
         }
 
         serializeJson(doc, file);
         file.close();
-
-        // Release mutex
         xSemaphoreGive(configMutex);
-
-        Serial.println("✅ Configuration saved");
         return true;
     }
     
@@ -255,7 +250,11 @@ public:
      * @brief Load configuration from file
      */
     bool load() {
-        File file = LittleFS.open(CONFIG_FILE, "r");
+        if (!LittleFS.exists(RUNTIME_CONFIG_FILE)) {
+            return false;
+        }
+        
+        File file = LittleFS.open(RUNTIME_CONFIG_FILE, "r");
         if (!file) {
             return false;
         }
@@ -265,16 +264,15 @@ public:
         file.close();
         
         if (error) {
-            Serial.printf("❌ Failed to parse config: %s\n", error.c_str());
+            ESP_LOGW("RtCfg", "Parse error: %s", error.c_str());
             return false;
         }
         
         if (!config.fromJson(doc.as<JsonObject>())) {
-            Serial.println("❌ Invalid config format");
+            ESP_LOGW("RtCfg", "Invalid config format");
             return false;
         }
         
-        Serial.println("✅ Configuration loaded");
         return true;
     }
     

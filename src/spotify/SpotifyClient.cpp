@@ -6,6 +6,10 @@
 #include "SpotifyClient.hpp"
 #include "SpotifySecure.hpp"
 #include "result.h"
+#include <LittleFS.h>
+#include <esp_log.h>
+
+static const char* TAG = "Spotify";
 
 SpotifyClient::SpotifyClient(AuthManager* auth)
     : authManager(auth)
@@ -24,13 +28,13 @@ void SpotifyClient::init() {
         return;
     }
 
-    Serial.println("🎵 Initializing SpotifyClient...");
+    ESP_LOGI(TAG, "Initializing...");
 
     // Configure HTTPS client with security
     SpotifySecure::initSecureClient(client);
 
     initialized = true;
-    Serial.println("✅ SpotifyClient initialized");
+    ESP_LOGI(TAG, "Initialized");
 }
 
 void SpotifyClient::setTokens(const String& access, const String& refresh) {
@@ -41,7 +45,7 @@ void SpotifyClient::setTokens(const String& access, const String& refresh) {
     tokenAcquiredAt = millis();
     tokenValidForMs = 3600000UL;  // 1 hour default (in production, parse JWT expiry)
 
-    Serial.println("🎫 Spotify tokens set");
+    ESP_LOGI(TAG, "Tokens set");
 }
 
 bool SpotifyClient::updateNowPlaying() {
@@ -54,9 +58,10 @@ Status SpotifyClient::updateNowPlayingEx() {
         return Status::failure(SpotifyError::AUTH_EXPIRED, "Token validation failed");
     }
 
-    HttpResult httpResult = httpGetEx("/me/player/currently-playing");
+    // Use /me/player for full state including shuffle/repeat
+    HttpResult httpResult = httpGetEx("/me/player");
 
-    // 204 means nothing is playing
+    // 204 means no active device / nothing playing
     if (httpResult.statusCode == 204) {
         currentTrack.isPlaying = false;
         return Status::success();
@@ -79,12 +84,24 @@ Status SpotifyClient::updateNowPlayingEx() {
         currentTrack.isPlaying = doc["is_playing"] | false;
         currentTrack.progressMs = doc["progress_ms"] | 0;
 
+        // Parse shuffle and repeat state
+        currentTrack.shuffleState = doc["shuffle_state"] | false;
+        const char* repeatStr = doc["repeat_state"] | "off";
+        if (strcmp(repeatStr, "track") == 0) {
+            currentTrack.repeatMode = 2;
+        } else if (strcmp(repeatStr, "context") == 0) {
+            currentTrack.repeatMode = 1;
+        } else {
+            currentTrack.repeatMode = 0;
+        }
+
         // Get device info
         if (doc.containsKey("device")) {
             JsonObject device = doc["device"];
             currentDevice.id = device["id"] | "";
             currentDevice.name = device["name"] | "";
             currentDevice.volumePercent = device["volume_percent"] | 50;
+            currentTrack.volumePercent = currentDevice.volumePercent;
         }
     }
 
@@ -186,6 +203,46 @@ Status SpotifyClient::seekEx(int positionMs) {
     endpoint.reserve(64);
     endpoint = "/me/player/seek?position_ms=";
     endpoint += String(positionMs);
+
+    HttpResult result = httpPutEx(endpoint);
+    if (!result.ok()) {
+        return Status::failure(result.error, result.message);
+    }
+    return Status::success();
+}
+
+bool SpotifyClient::setShuffle(bool state) {
+    auto status = setShuffleEx(state);
+    return status.ok();
+}
+
+Status SpotifyClient::setShuffleEx(bool state) {
+    if (!ensureValidToken()) {
+        return Status::failure(SpotifyError::AUTH_EXPIRED, "Token validation failed");
+    }
+
+    String endpoint = "/me/player/shuffle?state=";
+    endpoint += state ? "true" : "false";
+
+    HttpResult result = httpPutEx(endpoint);
+    if (!result.ok()) {
+        return Status::failure(result.error, result.message);
+    }
+    return Status::success();
+}
+
+bool SpotifyClient::setRepeat(const String& state) {
+    auto status = setRepeatEx(state);
+    return status.ok();
+}
+
+Status SpotifyClient::setRepeatEx(const String& state) {
+    if (!ensureValidToken()) {
+        return Status::failure(SpotifyError::AUTH_EXPIRED, "Token validation failed");
+    }
+
+    // Valid states: "off", "context", "track"
+    String endpoint = "/me/player/repeat?state=" + state;
 
     HttpResult result = httpPutEx(endpoint);
     if (!result.ok()) {
@@ -441,6 +498,24 @@ bool SpotifyClient::playTrack(const String& trackUri, const String& deviceId) {
     return httpPut("/me/player/play", body);
 }
 
+String SpotifyClient::urlEncode(const String& str) {
+    String encoded;
+    encoded.reserve(str.length() * 3); // worst case: every char gets encoded
+    for (size_t i = 0; i < str.length(); i++) {
+        char c = str[i];
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            encoded += c;
+        } else if (c == ' ') {
+            encoded += "%20";
+        } else {
+            char hex[4];
+            snprintf(hex, sizeof(hex), "%%%02X", (uint8_t)c);
+            encoded += hex;
+        }
+    }
+    return encoded;
+}
+
 SpotifyClient::SearchResult SpotifyClient::search(const String& query, int limit) {
     SearchResult result;
 
@@ -448,8 +523,7 @@ SpotifyClient::SearchResult SpotifyClient::search(const String& query, int limit
         return result;
     }
 
-    String encodedQuery = query;
-    encodedQuery.replace(" ", "%20");
+    String encodedQuery = urlEncode(query);
 
     String endpoint;
     endpoint.reserve(256);  // Bug #17 fix
@@ -460,13 +534,13 @@ SpotifyClient::SearchResult SpotifyClient::search(const String& query, int limit
     StaticJsonDocument<16384> doc;
 
     if (httpGet(endpoint, doc, 200)) {
-        // Parse tracks
+        // Parse tracks - search API returns tracks directly as items, not nested
         if (doc.containsKey("tracks")) {
             JsonObject tracks = doc["tracks"];
             if (tracks.containsKey("items")) {
                 JsonArray items = tracks["items"];
                 for (JsonObject item : items) {
-                    result.tracks.push_back(parseTrack(item["track"]));
+                    result.tracks.push_back(parseTrack(item));
                 }
             }
         }
@@ -649,8 +723,7 @@ Result<SpotifyClient::SearchResult> SpotifyClient::searchEx(const String& query,
         return Result<SearchResult>::failure(SpotifyError::AUTH_EXPIRED, "Token validation failed");
     }
 
-    String encodedQuery = query;
-    encodedQuery.replace(" ", "%20");
+    String encodedQuery = urlEncode(query);
 
     String endpoint;
     endpoint.reserve(256);
@@ -673,13 +746,13 @@ Result<SpotifyClient::SearchResult> SpotifyClient::searchEx(const String& query,
 
     SearchResult result;
 
-    // Parse tracks
+    // Parse tracks - search API returns tracks directly as items, not nested
     if (doc.containsKey("tracks")) {
         JsonObject tracks = doc["tracks"];
         if (tracks.containsKey("items")) {
             JsonArray items = tracks["items"];
             for (JsonObject item : items) {
-                result.tracks.push_back(parseTrack(item["track"]));
+                result.tracks.push_back(parseTrack(item));
             }
         }
     }
@@ -699,50 +772,47 @@ Result<SpotifyClient::SearchResult> SpotifyClient::searchEx(const String& query,
 }
 
 bool SpotifyClient::downloadImage(const String& url, const String& path) {
-    Serial.printf("🖼️  Downloading image: %s\n", url.c_str());
-    Serial.printf("   Saving to: %s\n", path.c_str());
+    ESP_LOGI(TAG, "Downloading image: %s -> %s", url.c_str(), path.c_str());
 
-    WiFiClientSecure client;
-    SpotifySecure::initInsecureClient(client); // Images from various sources
+    WiFiClientSecure imgClient;
+    SpotifySecure::initInsecureClient(imgClient); // Images from various sources
 
-    HTTPClient http;
-    http.begin(client, url);
-    http.addHeader("User-Agent", "SpotifyController/1.0");
+    HTTPClient imgHttp;
+    imgHttp.begin(imgClient, url);
+    imgHttp.addHeader("User-Agent", "SpotifyController/1.0");
 
-    int httpCode = http.GET();
+    int httpCode = imgHttp.GET();
 
     if (httpCode != 200) {
-        Serial.printf("⚠️  Image download failed: %d\n", httpCode);
-        http.end();
+        ESP_LOGW(TAG, "Image download failed: %d", httpCode);
+        imgHttp.end();
         return false;
     }
 
     // Get content length
-    int contentLength = http.getSize();
-    Serial.printf("   Image size: %d bytes\n", contentLength);
+    int contentLength = imgHttp.getSize();
+    ESP_LOGI(TAG, "Image size: %d bytes", contentLength);
 
     if (contentLength == 0 || contentLength > 500000) {
-        Serial.println("⚠️  Invalid image size");
-        http.end();
+        ESP_LOGW(TAG, "Invalid image size: %d", contentLength);
+        imgHttp.end();
         return false;
     }
 
     // Read image data
-    WiFiClient* stream = http.getStreamPtr();
+    WiFiClient* stream = imgHttp.getStreamPtr();
 
     // Open LittleFS file for writing
-    #ifdef LITTLEFS_PRESENT
     if (!LittleFS.begin()) {
-        Serial.println("⚠️  LittleFS not available");
-        http.end();
+        ESP_LOGE(TAG, "LittleFS not available for image save");
+        imgHttp.end();
         return false;
     }
 
     File file = LittleFS.open(path, "w");
     if (!file) {
-        Serial.println("⚠️  Failed to open file for writing");
-        http.end();
-        LittleFS.end();
+        ESP_LOGE(TAG, "Failed to open file for writing: %s", path.c_str());
+        imgHttp.end();
         return false;
     }
 
@@ -751,28 +821,16 @@ bool SpotifyClient::downloadImage(const String& url, const String& path) {
     int bytesRead = 0;
     int totalRead = 0;
 
-    while (http.connected() && (bytesRead = stream->readBytes(buffer, sizeof(buffer))) > 0) {
+    while (imgHttp.connected() && (bytesRead = stream->readBytes(buffer, sizeof(buffer))) > 0) {
         file.write(buffer, bytesRead);
         totalRead += bytesRead;
-
-        // Show progress every 10KB
-        if (totalRead % 10000 == 0) {
-            Serial.printf("   Progress: %d/%d bytes (%d%%)\n",
-                         totalRead, contentLength, (totalRead * 100) / contentLength);
-        }
     }
 
     file.close();
-    http.end();
-    LittleFS.end();
+    imgHttp.end();
 
-    Serial.printf("✅ Image downloaded: %d bytes saved\n", totalRead);
+    ESP_LOGI(TAG, "Image saved: %d bytes", totalRead);
     return true;
-    #else
-    http.end();
-    Serial.println("⚠️  LittleFS not available, image download skipped");
-    return false;
-    #endif
 }
 
 // Private methods
@@ -814,7 +872,7 @@ bool SpotifyClient::httpGet(const String& endpoint, JsonDocument& doc, int expec
         if (!payload.isEmpty() && payload.length() < 65536) {
             DeserializationError error = deserializeJson(doc, payload);
             if (error) {
-                Serial.printf("⚠️  JSON parse error: %s\n", error.c_str());
+                ESP_LOGW(TAG, "JSON parse error: %s", error.c_str());
                 http.end();
                 return false;
             }
@@ -823,7 +881,7 @@ bool SpotifyClient::httpGet(const String& endpoint, JsonDocument& doc, int expec
         return true;
     }
 
-    Serial.printf("⚠️  HTTP %d: %s\n", httpCode, http.getString().c_str());
+    ESP_LOGW(TAG, "HTTP %d: %s", httpCode, http.getString().c_str());
     http.end();
 
     // Token might be expired
@@ -1013,7 +1071,7 @@ bool SpotifyClient::ensureValidToken() {
     unsigned long elapsed = now - tokenAcquiredAt;
 
     if (elapsed >= tokenValidForMs) {
-        Serial.println("🔄 Token expired, refreshing...");
+        ESP_LOGI(TAG, "Token expired, refreshing...");
         return refreshTokenIfNeeded();
     }
 
@@ -1022,7 +1080,7 @@ bool SpotifyClient::ensureValidToken() {
 
 bool SpotifyClient::refreshTokenIfNeeded() {
     if (refreshToken.isEmpty()) {
-        Serial.println("❌ No refresh token available");
+        ESP_LOGW(TAG, "No refresh token available");
         return false;
     }
 
@@ -1036,7 +1094,7 @@ bool SpotifyClient::refreshTokenIfNeeded() {
             tokenValidForMs = 3600000UL;  // 1 hour
             // For backwards compatibility (deprecated field)
             tokenExpiryTime = tokenAcquiredAt + tokenValidForMs;
-            Serial.println("✅ Token refreshed");
+            ESP_LOGI(TAG, "Token refreshed successfully");
             return true;
         }
     }

@@ -14,6 +14,7 @@
 #include <functional>
 #include <map>
 #include <algorithm>
+#include <esp_log.h>
 
 /**
  * @brief Event Bus Class
@@ -73,9 +74,9 @@ public:
                 try {
                     subscriber.callback(event);
                 } catch (const std::exception& e) {
-                    Serial.printf("⚠️  Event callback error: %s\n", e.what());
+                    ESP_LOGE("EventBus", "Callback error: %s", e.what());
                 } catch (...) {
-                    Serial.printf("⚠️  Unknown event callback error\n");
+                    ESP_LOGE("EventBus", "Unknown callback error");
                 }
             }
         }
@@ -135,9 +136,9 @@ private:
             try {
                 subscriber.callback(event);
             } catch (const std::exception& e) {
-                Serial.printf("⚠️  Event callback error (all): %s\n", e.what());
+                ESP_LOGE("EventBus", "Wildcard callback error: %s", e.what());
             } catch (...) {
-                Serial.printf("⚠️  Unknown event callback error (all)\n");
+                ESP_LOGE("EventBus", "Unknown wildcard callback error");
             }
         }
     }

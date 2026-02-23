@@ -21,16 +21,7 @@
 #define SPOTIFY_API_BASE "https://api.spotify.com/v1"
 #define SPOTIFY_TOKEN_URL "https://accounts.spotify.com/api/token"
 
-// OAuth scopes
-#define SPOTIFY_SCOPES \
-    "user-read-playback-state " \
-    "user-modify-playback-state " \
-    "user-read-currently-playing " \
-    "user-read-playback-position " \
-    "user-library-read " \
-    "user-library-modify " \
-    "playlist-read-private " \
-    "playlist-read-collaborative"
+// SPOTIFY_SCOPES is defined in AuthManager.hpp (included above)
 
 // Poll interval for now playing updates
 #define SPOTIFY_POLL_INTERVAL_MS 2000
@@ -63,13 +54,19 @@ public:
         bool saved;
         bool explicitContent;
 
+        // Playback state (from /me/player)
+        bool shuffleState;
+        int repeatMode;  // 0=off, 1=context, 2=track
+
         TrackInfo()
             : isPlaying(false)
             , progressMs(0)
             , durationMs(0)
             , volumePercent(50)
             , saved(false)
-            , explicitContent(false) {
+            , explicitContent(false)
+            , shuffleState(false)
+            , repeatMode(0) {
         }
     };
 
@@ -157,6 +154,12 @@ public:
     Status nextTrackEx();
     Status previousTrackEx();
     Status seekEx(int positionMs);
+
+    // Shuffle and repeat
+    bool setShuffle(bool state);
+    bool setRepeat(const String& state); // "off", "context", "track"
+    Status setShuffleEx(bool state);
+    Status setRepeatEx(const String& state);
 
     // Volume control
     bool setVolume(int volumePercent);
@@ -278,6 +281,11 @@ private:
      * @brief Parse playlist from JSON
      */
     PlaylistInfo parsePlaylist(JsonObject playlistJson);
+
+    /**
+     * @brief URL-encode a string for query parameters
+     */
+    static String urlEncode(const String& str);
 
     // Auth manager
     AuthManager* authManager;

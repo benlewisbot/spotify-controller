@@ -130,11 +130,9 @@ public:
     void printConfig() const;
 
 private:
-    void createDefaults();
-
-public:
     ConfigManager();
     ~ConfigManager();
+    void createDefaults();
 
     /**
      * @brief Parse JSON to config struct

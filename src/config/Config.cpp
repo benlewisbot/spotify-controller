@@ -4,10 +4,13 @@
  */
 
 #include "Config.hpp"
+#include <esp_log.h>
 
 // For device ID generation
 #include <esp_system.h>
 #include <esp_mac.h>
+
+static const char* TAG = "Config";
 
 ConfigManager::ConfigManager() : initialized(false) {
     createDefaults();
@@ -38,19 +41,14 @@ bool ConfigManager::init() {
         return true;
     }
 
-    Serial.println("📁 Initializing ConfigManager...");
-
     // Initialize LittleFS
     if (!LittleFS.begin(true)) {  // true = format if fails
-        Serial.println("❌ Failed to mount LittleFS");
+        ESP_LOGE(TAG, "Failed to mount LittleFS");
         return false;
     }
 
-    Serial.println("✅ LittleFS mounted");
-
-    // Check filesystem info
-    Serial.printf("   Total: %d bytes, Used: %d bytes\n",
-                   LittleFS.totalBytes(), LittleFS.usedBytes());
+    ESP_LOGI(TAG, "LittleFS: %d/%d bytes used",
+             LittleFS.usedBytes(), LittleFS.totalBytes());
 
     // Generate device ID if not set
     if (config.device.deviceId.isEmpty()) {
@@ -59,11 +57,8 @@ bool ConfigManager::init() {
 
     // Try to load existing config
     if (!load()) {
-        Serial.println("📝 No config file found, using defaults");
-        Serial.println("💡 Configure via web interface or edit data/config.json");
-    } else {
-        Serial.println("📄 Configuration loaded");
-        printConfig();
+        ESP_LOGI(TAG, "No config file, saving defaults");
+        save();  // Create default config file to avoid errors on next boot
     }
 
     initialized = true;
@@ -82,18 +77,17 @@ bool ConfigManager::load() {
             file.close();
 
             if (!error) {
-                Serial.println("📄 Configuration loaded from main file");
                 JsonObject obj = doc.as<JsonObject>();
                 return parseFromJson(obj);
             } else {
-                Serial.printf("⚠️  Failed to parse main config: %s\n", error.c_str());
+                ESP_LOGW(TAG, "Config parse error: %s", error.c_str());
             }
         }
     }
 
     // Try backup file
     if (LittleFS.exists(BACKUP_FILE)) {
-        Serial.println("⚠️  Trying backup config file...");
+        ESP_LOGI(TAG, "Trying backup config...");
         File file = LittleFS.open(BACKUP_FILE, "r");
         if (file) {
             StaticJsonDocument<2048> doc;
@@ -101,35 +95,31 @@ bool ConfigManager::load() {
             file.close();
 
             if (!error) {
-                Serial.println("✅ Configuration loaded from backup");
-                // Restore backup as main config
                 LittleFS.rename(BACKUP_FILE, CONFIG_FILE);
                 JsonObject obj = doc.as<JsonObject>();
                 return parseFromJson(obj);
             } else {
-                Serial.printf("⚠️  Failed to parse backup config: %s\n", error.c_str());
+                ESP_LOGW(TAG, "Backup parse error: %s", error.c_str());
             }
         }
     }
 
-    Serial.println("⚠️  No valid config file found");
     return false;
 }
 
 bool ConfigManager::save() {
-    // Acquire mutex for thread-safe file operations
     if (configMutex == nullptr || xSemaphoreTake(configMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
-        Serial.println("❌ Failed to acquire config mutex");
+        ESP_LOGE(TAG, "Failed to acquire config mutex");
         return false;
     }
 
     const char* BACKUP_FILE = "/config.bak";
     const char* TEMP_FILE = "/config.tmp";
 
-    // 1. Write to temp file first
+    // Write to temp file first (atomic save pattern)
     File file = LittleFS.open(TEMP_FILE, "w");
     if (!file) {
-        Serial.println("❌ Failed to create temp config file");
+        ESP_LOGE(TAG, "Failed to create temp config");
         xSemaphoreGive(configMutex);
         return false;
     }
@@ -138,22 +128,21 @@ bool ConfigManager::save() {
     JsonObject obj = doc.as<JsonObject>();
     if (!serializeToJson(obj)) {
         file.close();
-        LittleFS.remove(TEMP_FILE);  // Clean up temp file
+        LittleFS.remove(TEMP_FILE);
         xSemaphoreGive(configMutex);
         return false;
     }
 
-    // Write to file
     if (serializeJson(doc, file) == 0) {
-        Serial.println("❌ Failed to write config");
+        ESP_LOGE(TAG, "Failed to write config");
         file.close();
-        LittleFS.remove(TEMP_FILE);  // Clean up temp file
+        LittleFS.remove(TEMP_FILE);
         xSemaphoreGive(configMutex);
         return false;
     }
     file.close();
 
-    // 2. Create backup of current config (atomic operation)
+    // Backup current, then atomic rename
     if (LittleFS.exists(CONFIG_FILE)) {
         if (LittleFS.exists(BACKUP_FILE)) {
             LittleFS.remove(BACKUP_FILE);
@@ -161,40 +150,31 @@ bool ConfigManager::save() {
         LittleFS.rename(CONFIG_FILE, BACKUP_FILE);
     }
 
-    // 3. Atomic rename: temp -> config
     if (!LittleFS.rename(TEMP_FILE, CONFIG_FILE)) {
-        Serial.println("❌ Failed to rename temp to config");
-        // Try to restore from backup
+        ESP_LOGE(TAG, "Atomic rename failed");
         if (LittleFS.exists(BACKUP_FILE)) {
             LittleFS.rename(BACKUP_FILE, CONFIG_FILE);
-            Serial.println("✅ Restored config from backup");
         }
-        LittleFS.remove(TEMP_FILE);  // Clean up temp file
+        LittleFS.remove(TEMP_FILE);
         xSemaphoreGive(configMutex);
         return false;
     }
 
-    // 4. Success - clean up backup (optional, keep for safety)
-    // LittleFS.remove(BACKUP_FILE);  // Uncomment if you want to delete backup
-
-    // Release mutex
     xSemaphoreGive(configMutex);
-
-    Serial.println("💾 Configuration saved (atomic)");
     return true;
 }
 
 void ConfigManager::reset() {
     createDefaults();
     save();
-    Serial.println("🔄 Configuration reset to defaults");
+    ESP_LOGI(TAG, "Config reset to defaults");
 }
 
 void ConfigManager::saveTokens(const String& accessToken, const String& refreshToken) {
     config.spotify.accessToken = accessToken;
     config.spotify.refreshToken = refreshToken;
     save();
-    Serial.println("💾 Spotify tokens saved");
+    ESP_LOGI(TAG, "Spotify tokens saved");
 }
 
 void ConfigManager::generateDeviceId() {
@@ -207,7 +187,7 @@ void ConfigManager::generateDeviceId() {
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     config.device.deviceId = String(deviceId);
 
-    Serial.printf("📱 Device ID: %s\n", config.device.deviceId.c_str());
+    ESP_LOGI(TAG, "Device ID: %s", config.device.deviceId.c_str());
 }
 
 bool ConfigManager::parseFromJson(const JsonObject& doc) {
@@ -308,34 +288,11 @@ bool ConfigManager::serializeToJson(JsonObject& doc) const {
 }
 
 void ConfigManager::printConfig() const {
-    Serial.println("\n📋 Current Configuration:");
-    Serial.println("─────────────────────────────────");
-
-    Serial.println("WiFi:");
-    Serial.printf("  SSID: %s\n", config.wifi.ssid.c_str());
-    Serial.printf("  Password: %s\n", config.wifi.password.isEmpty() ? "(not set)" : "***");
-
-    Serial.println("\nSpotify:");
-    Serial.printf("  Client ID: %s\n",
-                   config.spotify.clientId.isEmpty() ? "(not set)" : "***");
-    Serial.printf("  Access Token: %s\n",
-                   config.spotify.accessToken.isEmpty() ? "(not set)" : "***");
-    Serial.printf("  Refresh Token: %s\n",
-                   config.spotify.refreshToken.isEmpty() ? "(not set)" : "***");
-
-    Serial.println("\nDisplay:");
-    Serial.printf("  Orientation: %s\n",
-                   config.display.orientation == 0 ? "Landscape" : "Portrait");
-    Serial.printf("  Brightness: %d%%\n", config.display.brightness);
-    Serial.printf("  Screensaver: %s (%d min)\n",
-                   config.display.screensaver.enabled ? "ON" : "OFF",
-                   config.display.screensaver.timeoutMinutes);
-
-    Serial.println("\nVolume:");
-    Serial.printf("  Limit: %d%%\n", config.volume.limit);
-
-    Serial.println("\nDevice:");
-    Serial.printf("  ID: %s\n", config.device.deviceId.c_str());
-
-    Serial.println("─────────────────────────────────\n");
+    ESP_LOGI(TAG, "WiFi SSID: %s", config.wifi.ssid.isEmpty() ? "(not set)" : config.wifi.ssid.c_str());
+    ESP_LOGI(TAG, "Spotify: client_id=%s tokens=%s",
+             config.spotify.clientId.isEmpty() ? "no" : "yes",
+             config.spotify.accessToken.isEmpty() ? "no" : "yes");
+    ESP_LOGI(TAG, "Display: brightness=%d%% orientation=%d",
+             config.display.brightness, config.display.orientation);
+    ESP_LOGI(TAG, "Device: %s", config.device.deviceId.c_str());
 }

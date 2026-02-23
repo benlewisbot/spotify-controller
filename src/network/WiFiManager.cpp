@@ -4,6 +4,10 @@
  */
 
 #include "WiFiManager.hpp"
+#include "../app/App.hpp"
+#include <esp_log.h>
+
+static const char* TAG = "WiFi";
 
 // Static member
 WiFiManager* WiFiManager::instance = nullptr;
@@ -14,18 +18,20 @@ WiFiManager* WiFiManager::instance = nullptr;
 #define WIFI_MAX_RECONNECT_ATTEMPTS 10
 
 WiFiManager::WiFiManager()
-    : connectTimeout(WIFI_CONNECT_TIMEOUT_MS)
+    : state(WiFiState::DISCONNECTED)
+    , connectStartTime(0)
+    , connectTimeout(WIFI_CONNECT_TIMEOUT_MS)
     , autoReconnect(true)
+    , lastDisconnectTime(0)
     , lastDisconnectReason(0)
     , reconnectAttempts(0) {
 
     instance = this;
-    state = WiFiState::DISCONNECTED;
 
     // Register WiFi event handler
     WiFi.onEvent(onWiFiEvent);
 
-    Serial.println("📶 WiFiManager initialized");
+    ESP_LOGI(TAG, "Initialized");
 }
 
 WiFiManager::~WiFiManager() {
@@ -37,7 +43,7 @@ void WiFiManager::update() {
         case WiFiState::CONNECTING:
             // Check for timeout
             if (millis() - connectStartTime > connectTimeout) {
-                Serial.println("⏰ WiFi connection timeout");
+                ESP_LOGW(TAG, "Connection timeout");
                 WiFi.disconnect();
                 state = WiFiState::ERROR;
             }
@@ -62,7 +68,7 @@ bool WiFiManager::connect(const String& ssidName, const String& pass) {
     ssid = ssidName;
     password = pass;
 
-    Serial.printf("📶 Connecting to WiFi: %s\n", ssid.c_str());
+    ESP_LOGI(TAG, "Connecting to: %s", ssid.c_str());
 
     // Disconnect if connected
     if (WiFi.status() == WL_CONNECTED) {
@@ -92,7 +98,7 @@ void WiFiManager::disconnect() {
     state = WiFiState::DISCONNECTED;
     currentSSID = "";
 
-    Serial.println("📶 WiFi disconnected");
+    ESP_LOGI(TAG, "Disconnected");
 }
 
 void WiFiManager::reconnect() {
@@ -100,10 +106,10 @@ void WiFiManager::reconnect() {
         return;
     }
 
-    Serial.printf("📶 Reconnecting to WiFi (attempt %d)...\n", reconnectAttempts + 1);
+    ESP_LOGI(TAG, "Reconnecting (attempt %d)...", reconnectAttempts + 1);
 
     if (reconnectAttempts >= WIFI_MAX_RECONNECT_ATTEMPTS) {
-        Serial.println("⚠️  Max reconnect attempts reached");
+        ESP_LOGW(TAG, "Max reconnect attempts reached");
         return;
     }
 
@@ -122,7 +128,7 @@ void WiFiManager::reconnect() {
 }
 
 void WiFiManager::startAPMode(const String& apName) {
-    Serial.printf("📶 Starting AP mode: %s\n", apName.c_str());
+    ESP_LOGI(TAG, "Starting AP mode: %s", apName.c_str());
 
     // Disconnect from any network
     WiFi.disconnect();
@@ -138,13 +144,13 @@ void WiFiManager::startAPMode(const String& apName) {
     state = WiFiState::AP_MODE;
     currentSSID = apName;
 
-    Serial.printf("✅ AP mode started, IP: %s\n", WiFi.softAPIP().toString().c_str());
+    ESP_LOGI(TAG, "AP mode started, IP: %s", WiFi.softAPIP().toString().c_str());
 }
 
 void WiFiManager::stopAPMode() {
     if (state == WiFiState::AP_MODE) {
         WiFi.softAPdisconnect(true);
-        Serial.println("📶 AP mode stopped");
+        ESP_LOGI(TAG, "AP mode stopped");
     }
 }
 
@@ -174,35 +180,43 @@ void WiFiManager::onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
 
     switch (event) {
         case ARDUINO_EVENT_WIFI_STA_START:
-            Serial.println("📶 WiFi station started");
+            ESP_LOGI("WiFi", "Station started");
             break;
 
         case ARDUINO_EVENT_WIFI_STA_STOP:
-            Serial.println("📶 WiFi station stopped");
+            ESP_LOGI("WiFi", "Station stopped");
             break;
 
         case ARDUINO_EVENT_WIFI_STA_CONNECTED:
-            Serial.println("✅ WiFi connected");
+            ESP_LOGI("WiFi", "Connected to AP");
             break;
 
         case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
-            Serial.printf("📶 WiFi disconnected, reason: %d\n",
-                         info.wifi_sta_disconnected.reason);
+            ESP_LOGW("WiFi", "Disconnected, reason: %d",
+                     info.wifi_sta_disconnected.reason);
             instance->lastDisconnectTime = millis();
             instance->lastDisconnectReason = info.wifi_sta_disconnected.reason;
             instance->state = WiFiState::DISCONNECTED;
+
+            // Publish WIFI_DISCONNECTED event to EventBus
+            App::getInstance().getEventBus().publish(
+                Event(EventType::WIFI_DISCONNECTED));
             break;
 
         case ARDUINO_EVENT_WIFI_STA_GOT_IP:
-            Serial.printf("📶 WiFi got IP: %s\n", WiFi.localIP().toString().c_str());
-            Serial.printf("   Signal strength: %d dBm\n", WiFi.RSSI());
+            ESP_LOGI("WiFi", "Got IP: %s (RSSI: %d dBm)",
+                     WiFi.localIP().toString().c_str(), WiFi.RSSI());
             instance->currentSSID = WiFi.SSID();
             instance->state = WiFiState::CONNECTED;
             instance->reconnectAttempts = 0;
+
+            // Publish WIFI_CONNECTED event to EventBus
+            App::getInstance().getEventBus().publish(
+                Event(EventType::WIFI_CONNECTED));
             break;
 
         case ARDUINO_EVENT_WIFI_STA_LOST_IP:
-            Serial.println("📶 WiFi lost IP");
+            ESP_LOGW("WiFi", "Lost IP address");
             break;
 
         default:

@@ -5,6 +5,7 @@
 
 #include "DisplayManager.hpp"
 #include "../config/Config.hpp"
+#include <esp_log.h>
 
 #ifdef DISPLAY_ST7701S
 // For Guition ESP32-S3-4848S040 with ST7701S
@@ -50,34 +51,28 @@ DisplayManager::~DisplayManager() {
 }
 
 bool DisplayManager::init() {
-    Serial.printf("\n🖥  Initializing DisplayManager...\n");
-
     // Create display driver
     if (!createDisplayDriver()) {
-        Serial.println("❌ Failed to create display driver");
+        ESP_LOGE("DM", "Display driver failed");
         return false;
     }
 
-    Serial.printf("✅ Display: %s (%dx%d)\n",
-                  displayImpl->getName(),
-                  displayImpl->getWidth(),
-                  displayImpl->getHeight());
+    ESP_LOGI("DM", "%s %dx%d", displayImpl->getName(),
+             displayImpl->getWidth(), displayImpl->getHeight());
 
     // Create touch driver
     if (!createTouchDriver()) {
-        Serial.println("⚠️  No touch controller detected");
+        ESP_LOGW("DM", "No touch controller");
     }
 
     // Initialize LVGL
     if (!initLVGL()) {
-        Serial.println("❌ Failed to initialize LVGL");
+        ESP_LOGE("DM", "LVGL init failed");
         return false;
     }
 
-    Serial.println("✅ LVGL initialized");
-    Serial.println("✅ DisplayManager ready\n");
-
     initialized = true;
+    ESP_LOGI("DM", "Ready");
     return true;
 }
 
@@ -172,7 +167,7 @@ bool DisplayManager::createTouchDriver() {
     // Touch is integrated with the display driver
     touchImpl = new GT911Touch();
     if (touchImpl->init()) {
-        Serial.printf("✅ Touch: GT911 Capacitive\n");
+        ESP_LOGI("DM", "Touch: GT911 Capacitive");
         return true;
     }
     delete touchImpl;
@@ -200,19 +195,27 @@ bool DisplayManager::createTouchDriver() {
 #endif
 }
 
+// Wrapper to match lv_tick_get_cb_t signature (returns uint32_t)
+static uint32_t lvgl_tick_cb(void) {
+    return (uint32_t)millis();
+}
+
 bool DisplayManager::initLVGL() {
     // Initialize LVGL
     lv_init();
+
+    // Set tick callback so LVGL can track time (required in LVGL 9)
+    lv_tick_set_cb(lvgl_tick_cb);
 
     // Allocate display buffer from PSRAM if available
     size_t bufferSize = sizeof(lv_color_t) * width * 40;
     lv_color_t* buf1 = (lv_color_t*)heap_caps_malloc(bufferSize, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
     if (!buf1) {
-        Serial.println("⚠️  PSRAM not available, using regular RAM");
+        ESP_LOGW("DM", "PSRAM unavailable, using internal RAM");
         buf1 = (lv_color_t*)malloc(bufferSize);
         if (!buf1) {
-            Serial.println("❌ Failed to allocate display buffer");
+            ESP_LOGE("DM", "Display buffer allocation failed");
             return false;
         }
     }
@@ -225,9 +228,9 @@ bool DisplayManager::initLVGL() {
     }
 
     lv_display_set_flush_cb(display, flushCallback);
-    // Note: lv_display_set_flush_ready_cb not available in LVGL 9, using flush_wait_cb instead
-    // lv_display_set_flush_wait_cb(display, flushWaitCallback);
     lv_display_set_buffers(display, buf1, nullptr, bufferSize, LV_DISPLAY_RENDER_MODE_PARTIAL);
+    // Set color format to native RGB565 (no byte swap needed for ESP32 + LovyanGFX)
+    lv_display_set_color_format(display, LV_COLOR_FORMAT_NATIVE);
     
     // Set user data for callbacks
     lv_display_set_user_data(display, this);
@@ -250,9 +253,8 @@ void DisplayManager::update() {
         return;
     }
 
-    // Increase LVGL tick
-    lv_tick_inc(millis() - lastUpdateMs);
-    lastUpdateMs = millis();
+    // LV_TICK_CUSTOM is enabled in lv_conf.h, so LVGL reads millis() directly.
+    // No need to call lv_tick_inc() manually.
 
     // Handle LVGL tasks
     lv_timer_handler();
@@ -262,16 +264,15 @@ void DisplayManager::flushCallback(lv_display_t* disp, const lv_area_t* area, ui
     DisplayManager* dm = (DisplayManager*)lv_display_get_user_data(disp);
 
     if (dm && dm->displayImpl) {
-        // For ST7701S, LovyanGFX handles flushing internally
-        // For SPI displays, we need to implement flushing via TFT_eSPI
 #ifdef DISPLAY_ST7701S
         ST7701SDisplay* st7701 = static_cast<ST7701SDisplay*>(dm->displayImpl);
         if (st7701 && st7701->getLGFX()) {
-            st7701->getLGFX()->setAddrWindow(area->x1, area->y1, 
-                                              area->x2 - area->x1 + 1, 
-                                              area->y2 - area->y1 + 1);
-            st7701->getLGFX()->pushColors((uint16_t*)px_map, 
-                                          (area->x2 - area->x1 + 1) * (area->y2 - area->y1 + 1));
+            int32_t w = area->x2 - area->x1 + 1;
+            int32_t h = area->y2 - area->y1 + 1;
+            st7701->getLGFX()->startWrite();
+            st7701->getLGFX()->setAddrWindow(area->x1, area->y1, w, h);
+            st7701->getLGFX()->writePixels((lgfx::rgb565_t*)px_map, w * h);
+            st7701->getLGFX()->endWrite();
         }
 #endif
     }
