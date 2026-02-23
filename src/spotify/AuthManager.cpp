@@ -647,6 +647,10 @@ bool AuthManager::exchangeCodeForTokens(const String& code) {
     body += "&code_verifier=" + codeVerifier;
 
     ESP_LOGI(TAG, "Token exchange POST to %s", SPOTIFY_TOKEN_URL);
+    ESP_LOGI(TAG, "  client_id=%s", clientId.c_str());
+    ESP_LOGI(TAG, "  redirect_uri=%s", SPOTIFY_REDIRECT_URI);
+    ESP_LOGI(TAG, "  code_verifier len=%d", codeVerifier.length());
+    ESP_LOGI(TAG, "  code len=%d", code.length());
     int httpCode = http.POST(body);
     String response = http.getString();
     http.end();
