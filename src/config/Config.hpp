@@ -83,6 +83,7 @@ public:
 
     // Token Management
     void saveTokens(const String& accessToken, const String& refreshToken);
+    void clearTokens();
     String getAccessToken() const { return config.spotify.accessToken; }
     String getRefreshToken() const { return config.spotify.refreshToken; }
     bool hasStoredTokens() const {

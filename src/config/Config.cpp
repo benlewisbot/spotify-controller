@@ -179,6 +179,13 @@ void ConfigManager::saveTokens(const String& accessToken, const String& refreshT
     ESP_LOGI(TAG, "Spotify tokens saved");
 }
 
+void ConfigManager::clearTokens() {
+    config.spotify.accessToken = "";
+    config.spotify.refreshToken = "";
+    save();
+    ESP_LOGI(TAG, "Spotify tokens cleared");
+}
+
 void ConfigManager::generateDeviceId() {
     // Generate a unique device ID from MAC address
     uint8_t mac[6];

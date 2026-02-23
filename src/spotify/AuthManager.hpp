@@ -59,6 +59,7 @@ enum class AuthState {
  */
 using WiFiCredentialsCb = std::function<void(const String& ssid, const String& password)>;
 using ClientIdCb = std::function<void(const String& clientId)>;
+using AuthenticatedCb = std::function<void()>;
 
 /**
  * @brief Spotify Authentication Manager Class
@@ -103,6 +104,7 @@ public:
     // Callbacks for setup events
     void onWiFiCredentials(WiFiCredentialsCb cb) { wifiCredentialsCb = cb; }
     void onClientIdSet(ClientIdCb cb) { clientIdCb = cb; }
+    void onAuthenticated(AuthenticatedCb cb) { authenticatedCb = cb; }
 
     // Notify that WiFi connected (called by App after credentials applied)
     void onWiFiConnected();
@@ -153,6 +155,7 @@ private:
     // Callbacks
     WiFiCredentialsCb wifiCredentialsCb;
     ClientIdCb clientIdCb;
+    AuthenticatedCb authenticatedCb;
 };
 
 #endif // AUTH_MANAGER_HPP

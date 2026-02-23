@@ -142,8 +142,8 @@ void App::loop() {
     if (authManager) {
         authManager->update();
 
-        // Check if auth completed
-        if (state == AppState::AUTH_REQUIRED && authManager->isAuthenticated()) {
+        // Check if auth completed (state-independent safeguard)
+        if (authManager->isAuthenticated() && state != AppState::NOW_PLAYING) {
             onSpotifyAuthenticated();
         }
     }
@@ -269,6 +269,10 @@ bool App::initSpotify() {
         // Don't save here — wifiCredentialsCb fires next and saves everything
     });
 
+    authManager->onAuthenticated([this]() {
+        onSpotifyAuthenticated();
+    });
+
     spotifyClient = new SpotifyClient(authManager);
     spotifyClient->init();
 
@@ -354,6 +358,10 @@ void App::onWiFiDisconnected() {
 }
 
 void App::onSpotifyAuthenticated() {
+    if (state == AppState::NOW_PLAYING) {
+        return;
+    }
+
     ESP_LOGI("APP", "Spotify authenticated");
 
     // Bridge tokens from AuthManager to SpotifyClient
@@ -372,17 +380,27 @@ void App::onSpotifyAuthenticated() {
         );
     }
 
-    // Stop auth server
-    if (authManager) {
-        authManager->stopAuthServer();
-    }
-
-    // Show now playing
-    if (windowManager) {
-        windowManager->showNowPlaying();
-    }
-
     setState(AppState::NOW_PLAYING);
+
+    // Defer UI transition + server stop until after web handler returns.
+    scheduleTask([this]() {
+        if (windowManager) {
+            windowManager->showNowPlaying();
+            if (displayManager) {
+                displayManager->update();
+            }
+        }
+
+        if (authManager) {
+            authManager->stopAuthServer();
+        }
+    }, 200);
+
+    // Hard guarantee: reboot shortly after successful auth so boot flow starts
+    // cleanly from stored tokens and lands on NowPlaying.
+    scheduleTask([]() {
+        ESP.restart();
+    }, 1200);
 }
 
 void App::onSpotifyAuthError() {

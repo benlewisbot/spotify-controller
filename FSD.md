@@ -1,7 +1,7 @@
 # Spotify Controller - Functional Specification Document (FSD)
 
 **Version:** 2.0
-**Last Updated:** 2026-02-22
+**Last Updated:** 2026-02-23
 **Status:** Authoritative - Single Source of Truth
 **Target Hardware:** Guition ESP32-S3-4848S040 (480x480 square display)
 
@@ -71,7 +71,7 @@ device. It does **not** play audio locally - it is a remote control only.
 | Touch | GT911 Capacitive (I2C) |
 | Connectivity | WiFi 802.11 b/g/n, Bluetooth 5.0 LE |
 | Power | USB-C (5V, desk-powered, no battery) |
-| Buttons | BOOT, RESET |
+| Buttons | BOOT (no dedicated RESET on tested board variant) |
 
 ### 2.2 Pin Configuration
 
@@ -782,7 +782,7 @@ Shown when Spotify authentication is required.
 
 ### 9.1 Current Build State
 
-- **Last successful build:** 2026-02-16 (minimal build)
+- **Last successful build:** 2026-02-23 (auth + UI transition fixes)
 - **LVGL version:** Upgraded from 8.x to 9.4.0
 - **Known build prerequisite:** Must remove LVGL 9 ARM Helium assembly files after `pio run`:
   ```bash
@@ -801,6 +801,9 @@ All 17 critical bugs identified in `OPUS_COMPLETE_AUDIT.md` have been fixed:
 - Mutex protection for LittleFS writes
 - Null safety in JSON deserialization
 - Missing error propagation in API methods
+- Auth screen now shows dynamic device IP (AP: `192.168.4.1`, STA: real DHCP IP)
+- App state no longer clobbers `AUTH_REQUIRED` during init
+- Auth completion path now uses direct callback from `AuthManager` to `App`
 
 ### 9.3 Known Technical Debt
 
@@ -813,7 +816,8 @@ All 17 critical bugs identified in `OPUS_COMPLETE_AUDIT.md` have been fixed:
 | Legacy SPI drivers | Low | ILI9341, ILI9488, ST7789, ST7796U drivers exist but are not needed for target board. Keep for compatibility but don't maintain. |
 | GT911Touch coupling | Medium | `GT911Touch` class in ST7701SDisplay.hpp references `ST7701SDisplay*` but the touch read actually uses LovyanGFX panel touch. Coupling needs review. |
 | WindowManager minimal | High | WindowManager only shows NowPlaying and Auth. Needs to integrate with MenuManager for full navigation. |
-| Captive portal incomplete | Medium | AuthManager has captive portal skeleton but WiFi AP mode setup for first-time config needs work. |
+| Captive portal incomplete | Medium | AuthManager setup is functional but still needs UX polish and stronger edge-case handling. |
+| Post-auth UI transition | Medium | On this hardware, live LVGL screen transition after OAuth can be unreliable; current mitigation is a short controlled reboot after successful token save. |
 | LVGL tick handling | Low | `lv_tick_inc()` is called in DisplayManager::update() which runs in main loop. Consider FreeRTOS task for consistent timing. |
 | Unit tests | Medium | 13 tests exist in `test/` but have never been run. |
 
@@ -855,7 +859,7 @@ pip install platformio
 cd spotify-controller
 
 # Build (this downloads all dependencies)
-pio run -e esp32-s3-4848s040
+python -m platformio run -e esp32-s3-4848s040
 
 # IMPORTANT: After first build, remove ARM assembly files
 # (LVGL 9 includes ARM Helium code that fails on Xtensa/ESP32)
@@ -867,14 +871,14 @@ Remove-Item -Recurse -Force .pio\libdeps\esp32-s3-4848s040\lvgl\src\draw\convert
 Remove-Item -Recurse -Force .pio\libdeps\esp32-s3-4848s040\lvgl\src\draw\sw\blend\helium
 
 # Rebuild after removing helium files
-pio run -e esp32-s3-4848s040
+python -m platformio run -e esp32-s3-4848s040
 ```
 
 ### 10.3 Upload Config Data (LittleFS)
 
 ```bash
 # Upload data/ directory to LittleFS partition
-pio run -e esp32-s3-4848s040 --target uploadfs
+python -m platformio run -e esp32-s3-4848s040 --target uploadfs
 ```
 
 ### 10.4 Flash Firmware
@@ -886,7 +890,7 @@ pio run -e esp32-s3-4848s040 --target uploadfs
 # 3. Release BOOT button
 
 # Upload firmware
-pio run -e esp32-s3-4848s040 --target upload
+python -m platformio run -e esp32-s3-4848s040 --target upload
 
 # After flashing, press RESET to start
 ```
@@ -894,7 +898,7 @@ pio run -e esp32-s3-4848s040 --target upload
 ### 10.5 Serial Monitor
 
 ```bash
-pio device monitor -b 115200
+python -m platformio device monitor -b 115200
 ```
 
 ---
@@ -1176,5 +1180,5 @@ Register redirect URI: `https://your-worker.your-subdomain.workers.dev/callback`
 ---
 
 *Document created: 2026-02-22*
-*Last updated: 2026-02-23 — Added Appendix D (Cloud Proxy + QR Code auth roadmap)*
+*Last updated: 2026-02-23 — Updated build commands, auth transition behavior, and current technical debt status*
 *This is the authoritative specification. All implementation should follow this document.*

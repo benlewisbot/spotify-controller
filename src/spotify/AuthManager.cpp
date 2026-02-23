@@ -670,6 +670,11 @@ bool AuthManager::exchangeCodeForTokens(const String& code) {
 
             state = AuthState::AUTHENTICATED;
             ESP_LOGI(TAG, "Authenticated! Token expires in %ds", expiresIn);
+
+            if (authenticatedCb) {
+                authenticatedCb();
+            }
+
             return true;
         } else {
             ESP_LOGE(TAG, "Token JSON parse error: %s", error.c_str());
