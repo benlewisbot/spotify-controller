@@ -110,7 +110,11 @@ bool App::init() {
     registerEventHandlers();
 
     initialized = true;
-    setState(AppState::READY);
+
+    // Only transition to READY if we're not waiting for auth
+    if (state != AppState::AUTH_REQUIRED) {
+        setState(AppState::READY);
+    }
     ESP_LOGI("APP", "Ready");
 
     return true;
@@ -308,6 +312,11 @@ bool App::initUI() {
 
     if (state == AppState::AUTH_REQUIRED) {
         windowManager->showAuthScreen();
+
+        // Pass the correct IP to the auth screen
+        bool isAP = (wifiManager && wifiManager->getState() == WiFiState::AP_MODE);
+        String ip = isAP ? "192.168.4.1" : WiFi.localIP().toString();
+        windowManager->setAuthDeviceInfo(ip, isAP);
     } else {
         windowManager->showNowPlaying();
         setState(AppState::NOW_PLAYING);
@@ -322,6 +331,11 @@ void App::onWiFiConnected() {
     ESP_LOGI("APP", "WiFi connected, IP: %s", WiFi.localIP().toString().c_str());
 
     if (!authManager) return;
+
+    // Update auth screen IP now that we have a real address
+    if (windowManager && state == AppState::AUTH_REQUIRED) {
+        windowManager->setAuthDeviceInfo(WiFi.localIP().toString(), false);
+    }
 
     // If coming from captive portal setup, transition to OAuth mode
     if (authManager->getState() == AuthState::SETUP_CONNECTING) {
@@ -377,6 +391,10 @@ void App::onSpotifyAuthError() {
 
     if (windowManager) {
         windowManager->showAuthScreen();
+
+        bool isAP = (wifiManager && wifiManager->getState() == WiFiState::AP_MODE);
+        String ip = isAP ? "192.168.4.1" : WiFi.localIP().toString();
+        windowManager->setAuthDeviceInfo(ip, isAP);
     }
 }
 

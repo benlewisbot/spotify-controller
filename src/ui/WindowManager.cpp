@@ -146,6 +146,12 @@ void WindowManager::showAuthScreen() {
     authScreen->setStatus("Please authenticate with Spotify");
 }
 
+void WindowManager::setAuthDeviceInfo(const String& ip, bool isAPMode) {
+    if (authScreen) {
+        authScreen->setDeviceInfo(ip, isAPMode);
+    }
+}
+
 void WindowManager::showSettings() {
     // Hide NowPlaying
     if (nowPlayingScreen) {

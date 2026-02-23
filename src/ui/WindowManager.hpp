@@ -9,6 +9,7 @@
 #define WINDOW_MANAGER_HPP
 
 #include <lvgl.h>
+#include <Arduino.h>
 #include "../display/DisplayManager.hpp"
 #include "screens/MenuManager.hpp"
 
@@ -52,6 +53,13 @@ public:
      * @brief Show Authentication screen
      */
     void showAuthScreen();
+
+    /**
+     * @brief Update the auth screen with the device's IP and mode
+     * @param ip Device IP address (e.g., "192.168.2.106" or "192.168.4.1")
+     * @param isAPMode true if device is in AP mode, false if on home WiFi
+     */
+    void setAuthDeviceInfo(const String& ip, bool isAPMode);
 
     /**
      * @brief Show Settings screen
