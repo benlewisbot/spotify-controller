@@ -89,6 +89,24 @@ bool WiFiManager::connect(const String& ssidName, const String& pass) {
     return true;
 }
 
+bool WiFiManager::connectKeepAP(const String& ssidName, const String& pass) {
+    ssid = ssidName;
+    password = pass;
+
+    ESP_LOGI(TAG, "Connecting (AP+STA) to: %s", ssid.c_str());
+
+    // Switch to AP+STA — keeps AP alive so phone stays connected to captive portal
+    WiFi.mode(WIFI_AP_STA);
+
+    state = WiFiState::CONNECTING;
+    connectStartTime = millis();
+    reconnectAttempts = 0;
+
+    WiFi.begin(ssid.c_str(), password.c_str());
+
+    return true;
+}
+
 void WiFiManager::disconnect() {
     if (state == WiFiState::AP_MODE) {
         stopAPMode();

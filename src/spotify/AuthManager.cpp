@@ -75,6 +75,14 @@ void AuthManager::update() {
     // Handle web server
     handleWebServer();
 
+    // Check timeout for WiFi connection during setup
+    if (state == AuthState::SETUP_CONNECTING) {
+        if (millis() - authStartTime > 30000) {  // 30 seconds
+            ESP_LOGW(TAG, "WiFi connection timeout, returning to setup form");
+            state = AuthState::SETUP_WIFI;  // Re-show the setup form
+        }
+    }
+
     // Check timeout for OAuth phase
     if (state == AuthState::WAITING_FOR_AUTH) {
         if (millis() - authStartTime > AUTH_TIMEOUT_MS) {
@@ -253,14 +261,17 @@ label{color:#b3b3b3;font-size:13px}
     if (state == AuthState::SETUP_CONNECTING) {
         html += "<div class='card'><div class='status ok'>Connecting to WiFi...</div></div>";
     } else if (state == AuthState::WAITING_FOR_AUTH) {
-        // WiFi connected — redirect to the OAuth page on the device's real IP
+        // WiFi connected — tell user to switch to home WiFi, then open OAuth page
         html += "<div class='card'><div class='status ok'>WiFi Connected!</div>";
-        html += "<p style='color:#b3b3b3;text-align:center;margin:10px 0'>"
-                "Now open this link to connect Spotify:</p>";
-        html += "<a href='http://" + WiFi.localIP().toString() + "/' class='btn' "
-                "style='text-decoration:none;text-align:center'>Continue Setup</a>";
-        html += "<p class='info'>If the link doesn't work, go to: <b>http://"
-                + WiFi.localIP().toString() + "/</b></p>";
+        html += "<p style='color:#fff;text-align:center;margin:12px 0;font-size:15px'>"
+                "<b>Now switch your phone to your home WiFi network</b></p>";
+        html += "<p style='color:#b3b3b3;text-align:center;margin:8px 0;font-size:13px'>"
+                "Disconnect from \"SpotifyController\" and connect to your normal WiFi. "
+                "Then open this address in your browser:</p>";
+        html += "<div style='background:#404040;border-radius:8px;padding:12px;text-align:center;"
+                "margin:10px 0;font-size:16px;font-weight:bold;color:#1DB954;word-break:break-all'>"
+                "http://" + WiFi.localIP().toString() + "/</div>";
+        html += "<p class='info'>The device and your phone must be on the same WiFi network.</p>";
         html += "</div>";
     } else if (state == AuthState::AUTHENTICATED) {
         html += "<div class='card'><div class='status ok'>Setup Complete!</div>";
@@ -379,27 +390,39 @@ border-radius:50%;animation:s 0.8s linear infinite;vertical-align:middle;margin-
     if (state == AuthState::WAITING_FOR_AUTH) {
         html += "<p style='color:#b3b3b3;text-align:center;margin-bottom:16px'>"
                 "Connect your Spotify account to control playback.</p>";
+        html += "<div style='background:#1a2a1a;border:1px solid #1DB954;border-radius:8px;"
+                "padding:10px;margin:0 0 12px;text-align:center;font-size:13px;color:#b3b3b3'>"
+                "Make sure your phone is on your <b style='color:#fff'>home WiFi</b> "
+                "(not \"SpotifyController\") so it has internet access.</div>";
 
         // Step 1: Open auth URL
         html += "<div class='card'>";
         html += "<div class='step'><div class='step-num'>1</div>"
-                "<div class='step-text'><b>Open this link</b> in your browser "
-                "(long-press to copy, or tap to open):</div></div>";
+                "<div class='step-text'><b>Tap the button below</b> to open Spotify login "
+                "in a new tab:</div></div>";
         html += "<a href='" + authUrl + "' target='_blank' class='btn'>Open Spotify Login</a>";
-        html += "<div class='url-box'>" + authUrl + "</div>";
 
         // Step 2: Authorize and copy URL
         html += "<div class='step'><div class='step-num'>2</div>"
-                "<div class='step-text'><b>Log in &amp; authorize</b> on Spotify. "
-                "Your browser will try to redirect to <code>127.0.0.1</code> and show an error. "
-                "<b>This is normal!</b> Copy the <b>entire URL</b> from your browser's address bar.</div></div>";
+                "<div class='step-text'><b>Log in and authorize</b> on Spotify. "
+                "After you approve, your browser will show an <b>error page</b> "
+                "(\"This site can't be reached\" or similar). "
+                "<b>This is expected!</b></div></div>";
 
-        // Step 3: Paste URL — uses JS fetch() instead of <form> to avoid & parsing bug
+        // Step 3: Copy the URL from address bar
         html += "<div class='step'><div class='step-num'>3</div>"
-                "<div class='step-text'><b>Paste the URL</b> below and tap Submit:</div></div>";
-        html += "<textarea id='cb_url' placeholder='Paste the full URL here...' rows='3'"
+                "<div class='step-text'><b>Copy the URL</b> from your browser's address bar. "
+                "It will look like:<br>"
+                "<code style='font-size:11px;color:#1DB954;word-break:break-all'>"
+                "http://127.0.0.1:8888/callback?code=AQD...&amp;state=...</code></div></div>";
+
+        // Step 4: Paste URL
+        html += "<div class='step'><div class='step-num'>4</div>"
+                "<div class='step-text'><b>Paste that URL</b> here and tap Submit:</div></div>";
+        html += "<textarea id='cb_url' placeholder='Paste the callback URL from step 3 here...&#10;"
+                "It starts with http://127.0.0.1:8888/callback?code=...' rows='3'"
                 " oninput='validateUrl()'></textarea>";
-        html += "<button id='submit_btn' class='btn' disabled onclick='submitCode()'>Paste URL first</button>";
+        html += "<button id='submit_btn' class='btn' disabled onclick='submitCode()'>Paste callback URL first</button>";
         html += "<div id='status'></div>";
         html += "</div>"; // close .card
 
@@ -413,7 +436,7 @@ function validateUrl(){
  var u=document.getElementById('cb_url').value;
  var b=document.getElementById('submit_btn');
  if(u.indexOf('code=')>-1){b.disabled=false;b.textContent='Submit';b.style.opacity='1';}
- else{b.disabled=true;b.textContent='Paste URL first';b.style.opacity='0.5';}
+ else{b.disabled=true;b.textContent='Paste callback URL first';b.style.opacity='0.5';}
 }
 function submitCode(){
  var u=document.getElementById('cb_url').value.trim();

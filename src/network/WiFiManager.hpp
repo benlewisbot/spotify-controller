@@ -37,9 +37,15 @@ public:
     void update();
 
     /**
-     * @brief Connect to WiFi network
+     * @brief Connect to WiFi network (switches to STA mode)
      */
     bool connect(const String& ssid, const String& password);
+
+    /**
+     * @brief Connect to WiFi while keeping AP alive (AP_STA mode).
+     * Used during captive portal setup so phone stays connected to AP.
+     */
+    bool connectKeepAP(const String& ssid, const String& password);
 
     /**
      * @brief Disconnect from WiFi

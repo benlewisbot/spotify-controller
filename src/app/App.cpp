@@ -138,14 +138,6 @@ void App::loop() {
     if (authManager) {
         authManager->update();
 
-        // Detect WiFi connection during captive portal setup
-        static bool wasConnected = false;
-        bool nowConnected = (WiFi.status() == WL_CONNECTED);
-        if (nowConnected && !wasConnected) {
-            authManager->onWiFiConnected();
-        }
-        wasConnected = nowConnected;
-
         // Check if auth completed
         if (state == AppState::AUTH_REQUIRED && authManager->isAuthenticated()) {
             onSpotifyAuthenticated();
@@ -263,15 +255,14 @@ bool App::initSpotify() {
         configManager->setWiFiPassword(password);
         configManager->save();
 
-        // Connect to WiFi (switch from AP to STA+AP mode temporarily)
-        WiFi.mode(WIFI_AP_STA);
-        WiFi.begin(ssid.c_str(), password.c_str());
+        // Connect to WiFi via WiFiManager (keeps AP alive for captive portal)
+        wifiManager->connectKeepAP(ssid, password);
     });
 
     authManager->onClientIdSet([this](const String& id) {
         ESP_LOGI("APP", "Setup: Spotify client ID set");
         configManager->setSpotifyClientId(id);
-        configManager->save();
+        // Don't save here — wifiCredentialsCb fires next and saves everything
     });
 
     spotifyClient = new SpotifyClient(authManager);
@@ -330,7 +321,16 @@ bool App::initUI() {
 void App::onWiFiConnected() {
     ESP_LOGI("APP", "WiFi connected, IP: %s", WiFi.localIP().toString().c_str());
 
-    if (state == AppState::AUTH_REQUIRED && authManager) {
+    if (!authManager) return;
+
+    // If coming from captive portal setup, transition to OAuth mode
+    if (authManager->getState() == AuthState::SETUP_CONNECTING) {
+        authManager->onWiFiConnected();
+    }
+    // If auth is required but OAuth server not yet started (cold boot path)
+    else if (state == AppState::AUTH_REQUIRED
+             && !authManager->isAuthenticated()
+             && authManager->getState() == AuthState::NONE) {
         authManager->startAuthServer();
     }
 }

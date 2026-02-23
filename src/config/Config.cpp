@@ -61,6 +61,8 @@ bool ConfigManager::init() {
         save();  // Create default config file to avoid errors on next boot
     }
 
+    printConfig();  // Log what we loaded
+
     initialized = true;
     return true;
 }
@@ -125,7 +127,7 @@ bool ConfigManager::save() {
     }
 
     StaticJsonDocument<2048> doc;
-    JsonObject obj = doc.as<JsonObject>();
+    JsonObject obj = doc.to<JsonObject>();  // to<> creates the object; as<> would return null
     if (!serializeToJson(obj)) {
         file.close();
         LittleFS.remove(TEMP_FILE);
